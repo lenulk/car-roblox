@@ -218,7 +218,7 @@ return function(level: number, accent: Color3, opts: { [string]: any }?): Model
 	ModelKit.metal(model, "SightFrame", Vector3.new(0.5, 0.12, 0.2), CFrame.new(CX + 1.0, 1.14, -2.95), tier)
 
 	if tier.rust then
-		rust(CFrame.new(CX - 0.5, 1.8, -3.28), 0.7, 0.5)
+		rust(CFrame.new(CX - 0.5, 1.8, -3.23), 0.7, 0.5)
 		rust(CFrame.new(CX + 0.1, 3.0, -3.29), 0.5, 0.4)
 		-- patched crack with tape + dent
 		ModelKit.part(model, "TankTape", Vector3.new(1.3, 0.3, 0.1), CFrame.new(CX - 0.3, 2.3, -3.3) * CFrame.Angles(0, 0, math.rad(20)), TAPE, {
@@ -309,9 +309,6 @@ return function(level: number, accent: Color3, opts: { [string]: any }?): Model
 		local zs = if lv == 1 then { -2.5, -1.4 } else { -2.7, -2.0, -1.3, -0.6 }
 		for i, fz in zs do
 			ModelKit.cylinder(model, "OilFilter", "Y", 0.7, 0.55, CFrame.new(4.3, sy + 0.4, fz), filterColors[i], nil)
-			if lv >= 3 then
-				ModelKit.cylinder(model, "FilterCap", "Y", 0.1, 0.34, CFrame.new(4.3, sy + 0.79, fz), tier.trimColor, trimProps)
-			end
 		end
 		if lv >= 3 then
 			ModelKit.led(model, "RackLED", Vector3.new(0.06, 0.06, 3.0), CFrame.new(3.7, sy - 0.05, -1.7), tier, accent)

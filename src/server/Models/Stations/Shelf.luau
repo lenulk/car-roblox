@@ -418,7 +418,7 @@ return function(level: number, accent: Color3, opts: { [string]: any }?): Model
 		holo.Name = "HoloAd"
 		addText(holo, Enum.NormalId.Front, AD[product], Color3.fromRGB(255, 255, 255), 60)
 		for _, s in { -1, 1 } do
-			ModelKit.led(model, "SideNeon", Vector3.new(0.06, topY - F, 0.06), CFrame.new(s * 4.52, (topY + F) / 2, frontZ - 0.02), tier, accent)
+			ModelKit.led(model, "SideNeon", Vector3.new(0.06, topY - F, 0.06), CFrame.new(s * 4.4, (topY + F) / 2, frontZ - 0.03), tier, accent)
 		end
 	end
 

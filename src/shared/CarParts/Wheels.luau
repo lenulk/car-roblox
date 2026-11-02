@@ -142,8 +142,6 @@ function Wheels.build(ctx: any, name: string, sx: number, cx: number, cz: number
 				)
 			end
 		end
-		disc("MeshRing", D * 0.62, B + 0.1, B + 0.15, rimColor, METAL)
-		disc("MeshHole", D * 0.46, B + 0.11, B + 0.16, Kit.DARK)
 	elseif style == "OffRoad" then
 		-- chunky: 3 fat bars, bolted beadlock ring, tread blocks around the tire
 		for i = 0, 2 do
@@ -160,8 +158,8 @@ function Wheels.build(ctx: any, name: string, sx: number, cx: number, cz: number
 				METAL
 			)
 		end
-		for i = 0, 9 do
-			local a = i * TAU / 10
+		for i = 0, 7 do
+			local a = i * TAU / 8
 			T.box(
 				"Tread",
 				V3(TW * 0.94, 0.13, 0.5),

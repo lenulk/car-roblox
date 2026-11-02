@@ -207,16 +207,15 @@ return function(level: number, accent: Color3, opts: { [string]: any }?): Model
 			metalProps
 		)
 	end
-	local hub: Part
 	if lv >= 4 then
-		hub = ModelKit.cylinder(model, "HubCap", "Y", 0.2, 0.8, CFrame.new(0, 5.32, 0), accent, {
+		local hub = ModelKit.cylinder(model, "HubCap", "Y", 0.2, 0.8, CFrame.new(0, 5.32, 0), accent, {
 			Material = Enum.Material.Neon,
 			CanCollide = false,
 			CastShadow = false,
 		})
 		ModelKit.role(hub, "Accent")
 	else
-		hub = ModelKit.cylinder(model, "HubCap", "Y", 0.2, 0.8, CFrame.new(0, 5.32, 0), if lv == 1 then tier.trimColor else BASE_RED, trimProps)
+		ModelKit.cylinder(model, "HubCap", "Y", 0.2, 0.8, CFrame.new(0, 5.32, 0), if lv == 1 then tier.trimColor else BASE_RED, trimProps)
 	end
 	if lv >= 3 then
 		for i = 0, 4 do

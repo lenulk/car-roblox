@@ -1,131 +1,218 @@
 --!strict
--- Builds customer cars out of Parts (CONTRACT.md section 8).
+-- Builds cars out of Parts (CONTRACT.md sections 8 and 17). No meshes, no asset ids.
 -- Car space: Root is at the origin on the ground, nose = -Z (LookVector), +X = right side, +Y = up.
 -- The caller moves the finished car with model:PivotTo(cf).
+--
+--   CarBuilder.build(carTypeId, opts?)        customer car: default customization, lower detail, random paint
+--   CarBuilder.buildCustom(carTypeId, custom) personal car: full detail, wheels as Wheel_FL/FR/RL/RR models, FX attachments
+--   CarBuilder.recolor(model, color)
+--
+-- The bodies live in src/shared/CarParts/ (Designs = the six cars, Wheels, Custom = spoilers/kits/decals, Kit = part helpers).
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local CarTypes: any = require(script.Parent.Config.CarTypes)
+local Shared: any = script.Parent
+local CarTypes: any = require(Shared.Config.CarTypes)
+local Kit: any = require(Shared.CarParts.Kit)
+local Wheels: any = require(Shared.CarParts.Wheels)
+local Designs: any = require(Shared.CarParts.Designs)
+local Custom: any = require(Shared.CarParts.Custom)
 
 local CarBuilder = {}
 
 type Props = { [string]: any }
 
 local V3 = Vector3.new
-local CF = CFrame.new
-local ANG = CFrame.Angles
 local RGB = Color3.fromRGB
 
-local SMOOTH = Enum.Material.SmoothPlastic
-local PAINT: Props = { Material = SMOOTH, Reflectance = 0.15 }
-
-local TIRE_COLOR = RGB(24, 24, 27)
-local RIM_COLOR = RGB(218, 221, 228)
-local SPOKE_COLOR = RGB(150, 155, 166)
-local HUB_COLOR = RGB(58, 60, 66)
-local BUMPER_COLOR = RGB(62, 64, 70)
-local DARK = RGB(22, 23, 27)
-local GLASS_COLOR = RGB(26, 38, 52)
-local SEAT_COLOR = RGB(44, 46, 54)
-local CHROME = RGB(222, 225, 232)
-local HEADLIGHT = RGB(255, 244, 205)
-local TAILLIGHT = RGB(255, 40, 50)
-
 ------------------------------------------------------------------------------------------------
--- Generic helpers
+-- Customization config (optional: falls back to built-in defaults)
 ------------------------------------------------------------------------------------------------
 
-local function configure(
-	p: BasePart,
-	parent: Instance,
-	name: string,
-	size: Vector3,
-	cf: CFrame,
-	color: Color3,
-	props: Props?
-)
-	p.Name = name
-	p.Anchored = false
-	p.CanCollide = false
-	p.CanTouch = false
-	p.CanQuery = false
-	p.Massless = true
-	p.CastShadow = true
-	p.TopSurface = Enum.SurfaceType.Smooth
-	p.BottomSurface = Enum.SurfaceType.Smooth
-	p.Material = SMOOTH
-	p.Size = size
-	p.CFrame = cf
-	p.Color = color
-	if props then
-		local any = p :: any
-		for k, v in props do
-			any[k] = v
+local FALLBACK_DEFAULTS: { [string]: string } = {
+	paint = "E8E8EC",
+	material = "Gloss",
+	wheel = "Classic",
+	rim = "D8DBE2",
+	caliper = "9EA3AD",
+	spoiler = "None",
+	kit = "Stock",
+	hood = "Stock",
+	tint = "Clear",
+	neon = "None",
+	headlight = "FFF4D0",
+	flames = "Off",
+	smoke = "None",
+	decal = "None",
+}
+
+local okCust, customizationModule = pcall(function()
+	return require(Shared.Config.Customization)
+end)
+local Customization: any = if okCust then customizationModule else nil
+
+local DEFAULTS: { [string]: string } = FALLBACK_DEFAULTS
+if Customization and type(Customization.DEFAULTS) == "table" then
+	DEFAULTS = Customization.DEFAULTS
+end
+
+local function hexToColor(hex: string): Color3
+	if Customization and type(Customization.hexToColor) == "function" then
+		local ok, c = pcall(Customization.hexToColor, hex)
+		if ok and typeof(c) == "Color3" then
+			return c
 		end
 	end
-	p.Parent = parent
+	local ok, c = pcall(Color3.fromHex, "#" .. hex)
+	if ok then
+		return c
+	end
+	return Color3.new(1, 1, 1)
 end
 
-local function newBox(parent: Instance, name: string, size: Vector3, cf: CFrame, color: Color3, props: Props?): BasePart
-	local p = Instance.new("Part")
-	configure(p, parent, name, size, cf, color, props)
-	return p
+-- defaults overlaid with the caller's choices (string values only)
+local function resolveCustom(custom: { [string]: string }?): { [string]: string }
+	local out: { [string]: string } = {}
+	for k, v in FALLBACK_DEFAULTS do
+		out[k] = v
+	end
+	for k, v in DEFAULTS do
+		out[k] = v
+	end
+	if custom then
+		for k, v in custom do
+			if type(v) == "string" then
+				out[k] = v
+			end
+		end
+	end
+	return out
 end
 
--- WedgePart default orientation: tall edge on +Z, slope rising toward +Z (low at -Z).
-local function newWedge(parent: Instance, name: string, size: Vector3, cf: CFrame, color: Color3, props: Props?): BasePart
-	local p = Instance.new("WedgePart")
-	configure(p, parent, name, size, cf, color, props)
-	return p
+local WHEEL_STYLES: { [string]: boolean } = {
+	Classic = true,
+	Sport = true,
+	Turbo = true,
+	Mesh = true,
+	OffRoad = true,
+	DeepDish = true,
+	Spinner = true,
+	NeonRim = true,
+}
+
+-- default wheel of customer cars (build()), kept cheap
+local CUSTOMER_WHEEL: { [string]: string } = {
+	Sedan = "Classic",
+	Pickup = "Classic",
+	Muscle = "Sport",
+	Truck = "Classic",
+	Sports = "Sport",
+	Super = "Sport",
+}
+
+-- body material -> (color, props)
+local function paintFor(material: string, base: Color3): (Color3, Props)
+	if material == "Matte" then
+		return base, { Material = Enum.Material.SmoothPlastic, Reflectance = 0 }
+	elseif material == "Metallic" then
+		return base, { Material = Enum.Material.Metal, Reflectance = 0.25 }
+	elseif material == "Pearl" then
+		return base:Lerp(RGB(255, 255, 255), 0.15), { Material = Enum.Material.SmoothPlastic, Reflectance = 0.35 }
+	elseif material == "Carbon" then
+		return RGB(28, 28, 32), { Material = Enum.Material.DiamondPlate, Reflectance = 0.15 }
+	elseif material == "Chrome" then
+		return base:Lerp(RGB(220, 225, 235), 0.5), { Material = Enum.Material.Metal, Reflectance = 0.6 }
+	elseif material == "Neon" then
+		return base, { Material = Enum.Material.Neon }
+	end
+	return base, { Material = Enum.Material.SmoothPlastic, Reflectance = 0.18 } -- Gloss
 end
 
--- Cylinder whose axis is the part's local X. Size = (length, diameter, diameter).
-local function newCylinder(
-	parent: Instance,
-	name: string,
-	length: number,
-	diameter: number,
-	cf: CFrame,
-	color: Color3,
-	props: Props?
-): BasePart
-	local p = Instance.new("Part")
-	configure(p, parent, name, V3(length, diameter, diameter), cf, color, props)
-	p.Shape = Enum.PartType.Cylinder
-	return p
-end
-
-local function addPlateGui(plate: BasePart, face: Enum.NormalId, text: string)
-	local gui = Instance.new("SurfaceGui")
-	gui.Name = "PlateGui"
-	gui.Face = face
-	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
-	gui.PixelsPerStud = 60
-	gui.LightInfluence = 1
-	gui.Parent = plate
-
-	local label = Instance.new("TextLabel")
-	label.Name = "PlateText"
-	label.BackgroundTransparency = 1
-	label.Size = UDim2.fromScale(1, 1)
-	label.Text = text
-	label.TextScaled = true
-	label.Font = Enum.Font.GothamBold
-	label.TextColor3 = RGB(20, 28, 60)
-	label.Parent = gui
+local function glassFor(tint: string): (Color3, number)
+	if tint == "Smoke" then
+		return RGB(22, 28, 36), 0.2
+	elseif tint == "Black" then
+		return RGB(8, 9, 12), 0.05
+	end
+	return RGB(40, 55, 75), 0.35 -- Clear
 end
 
 ------------------------------------------------------------------------------------------------
--- Procedural cars (Sedan / Pickup)
+-- FX attachments
 ------------------------------------------------------------------------------------------------
 
-local function buildProcedural(carTypeId: string, def: any, color: Color3): Model
+local function makeFlame(att: Attachment, blue: boolean)
+	local e = Instance.new("ParticleEmitter")
+	e.Name = "Flame"
+	e.Enabled = false
+	e.Color = if blue
+		then ColorSequence.new(RGB(170, 225, 255), RGB(40, 100, 255))
+		else ColorSequence.new(RGB(255, 210, 70), RGB(255, 80, 10))
+	e.LightEmission = 1
+	e.LightInfluence = 0
+	e.Lifetime = NumberRange.new(0.12, 0.25)
+	e.Speed = NumberRange.new(10, 16)
+	e.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.8), NumberSequenceKeypoint.new(1, 0) })
+	e.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(1, 1) })
+	e.Rate = 120
+	e.SpreadAngle = Vector2.new(5, 5)
+	e.EmissionDirection = Enum.NormalId.Back -- +Z = out of the tailpipe
+	e.Parent = att
+end
+
+local function makeSmoke(att: Attachment, color: Color3)
+	local e = Instance.new("ParticleEmitter")
+	e.Name = "TireSmoke"
+	e.Enabled = false
+	e.Texture = "rbxasset://textures/particles/smoke_main.dds"
+	e.Color = ColorSequence.new(color)
+	e.LightEmission = 0.1
+	e.Lifetime = NumberRange.new(1.5)
+	e.Rate = 60
+	e.Speed = NumberRange.new(3, 7)
+	e.SpreadAngle = Vector2.new(30, 30)
+	e.Rotation = NumberRange.new(0, 360)
+	e.RotSpeed = NumberRange.new(-40, 40)
+	e.Acceleration = V3(0, 1.5, 0)
+	e.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 2), NumberSequenceKeypoint.new(1, 6) })
+	e.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.4), NumberSequenceKeypoint.new(1, 1) })
+	e.Parent = att
+end
+
+local function makeAttachment(root: BasePart, name: string, pos: Vector3): Attachment
+	local a = Instance.new("Attachment")
+	a.Name = name
+	a.Position = pos
+	a.Parent = root
+	return a
+end
+
+------------------------------------------------------------------------------------------------
+-- Procedural cars
+------------------------------------------------------------------------------------------------
+
+local function stringHash(s: string): number
+	local h = 0
+	for i = 1, #s do
+		h = (h * 31 + string.byte(s, i)) % 100003
+	end
+	return h
+end
+
+local function buildProcedural(
+	id: string,
+	def: any,
+	custom: { [string]: string },
+	paintBase: Color3,
+	detail: boolean,
+	full: boolean
+): Model
 	local size: Vector3 = def.size
 	local W, H, L = size.X, size.Y, size.Z
-	local isPickup = carTypeId == "Pickup"
+	local params = Designs.PARAMS[id] or Designs.PARAMS.Sedan
 
 	local model = Instance.new("Model")
-	model.Name = carTypeId
+	model.Name = id
 
 	local root = Instance.new("Part")
 	root.Name = "Root"
@@ -138,7 +225,7 @@ local function buildProcedural(carTypeId: string, def: any, color: Color3): Mode
 	root.TopSurface = Enum.SurfaceType.Smooth
 	root.BottomSurface = Enum.SurfaceType.Smooth
 	root.Size = V3(W, 0.2, L)
-	root.CFrame = CF()
+	root.CFrame = CFrame.new()
 	root.Parent = model
 	model.PrimaryPart = root
 
@@ -147,226 +234,85 @@ local function buildProcedural(carTypeId: string, def: any, color: Color3): Mode
 	top.Position = V3(0, H + 2, 0)
 	top.Parent = root
 
-	local function paint(name: string, s: Vector3, cf: CFrame): BasePart
-		return newBox(model, name, s, cf, color, PAINT)
+	-- context shared by all part builders ------------------------------------------------------------
+	local wheelStyle = custom.wheel
+	if not WHEEL_STYLES[wheelStyle] then
+		wheelStyle = "Classic"
 	end
-	local function box(name: string, s: Vector3, cf: CFrame, c: Color3, props: Props?): BasePart
-		return newBox(model, name, s, cf, c, props)
-	end
+	local offroad = wheelStyle == "OffRoad"
+	local paintColor, paintProps = paintFor(custom.material, paintBase)
+	local glassColor, glassT = glassFor(custom.tint)
 
-	-- Key dimensions -------------------------------------------------------------------------
-	local D = 0.22 * L -- wheel diameter
-	local TW = 0.9 -- tire width
-	local Wb = W - 1.6 -- body width (wheels stick out on both sides)
-	local gc = 0.55 -- ground clearance of the body
-	local lowerH = H * 0.39
-	local lowerTop = gc + lowerH
-	local zf = -L / 2 + 0.6 -- front face of the body
-	local zr = L / 2 - 0.6 -- rear face of the body
-	local bodyLen = zr - zf
-	local hoodLen = (if isPickup then 0.27 else 0.30) * L
-	local hoodTop = lowerTop + 0.3
-	local cabinStart = zf + hoodLen
-	local cabinEnd = if isPickup then cabinStart + 0.28 * L else zr - 0.2 * L
-	local cabinSpan = cabinEnd - cabinStart
-	local wedgeFront = 0.36 * cabinSpan
-	local wedgeRear = if isPickup then 0 else 0.28 * cabinSpan
-	local coreLen = cabinSpan - wedgeFront - wedgeRear
-	local coreStart = cabinStart + wedgeFront
-	local coreEnd = coreStart + coreLen
-	local glassH = H - hoodTop - 0.22
-	local glassMidY = hoodTop + glassH / 2
-	local Wg = Wb * 0.82 -- glass width
-	local deckEnd = if isPickup then cabinEnd else zr
-
-	-- Body ----------------------------------------------------------------------------------
-	paint("Body", V3(Wb, lowerH, bodyLen), CF(0, gc + lowerH / 2, (zf + zr) / 2))
-	box("Underbody", V3(Wb - 0.4, 0.3, bodyLen - 0.4), CF(0, gc - 0.1, 0), DARK)
-	-- hood (+ trunk for the sedan) deck
-	paint("BodyPanel", V3(Wb - 0.2, 0.3, deckEnd - zf), CF(0, lowerTop + 0.15, (zf + deckEnd) / 2))
-
-	-- Cabin glass ---------------------------------------------------------------------------
-	local glassProps: Props = { Material = Enum.Material.Glass, Transparency = 0.35, Reflectance = 0.1 }
-	box("Glass", V3(Wg, glassH, coreLen), CF(0, glassMidY, coreStart + coreLen / 2), GLASS_COLOR, glassProps)
-	newWedge(
-		model,
-		"Windshield",
-		V3(Wg, glassH, wedgeFront),
-		CF(0, glassMidY, cabinStart + wedgeFront / 2),
-		GLASS_COLOR,
-		glassProps
-	)
-	if not isPickup then
-		newWedge(
-			model,
-			"RearWindow",
-			V3(Wg, glassH, wedgeRear),
-			CF(0, glassMidY, cabinEnd - wedgeRear / 2) * ANG(0, math.pi, 0),
-			GLASS_COLOR,
-			glassProps
-		)
+	local ctx: any = {
+		id = id,
+		W = W,
+		H = H,
+		L = L,
+		Wb = W - 1.4,
+		model = model,
+		root = root,
+		detail = detail,
+		beams = full,
+		custom = custom,
+		wheelStyle = wheelStyle,
+		D = params.kD * L * (if offroad then 1.12 else 1),
+		TW = params.tw + (if offroad then 0.15 else 0),
+		axF = params.axF * L,
+		axR = params.axR * L,
+		paintColor = paintColor,
+		paintProps = paintProps,
+		glassColor = glassColor,
+		glassProps = { Material = Enum.Material.Glass, Transparency = glassT, Reflectance = 0.1 } :: Props,
+		headColor = hexToColor(custom.headlight),
+		rimColor = hexToColor(custom.rim),
+		caliperColor = hexToColor(custom.caliper),
+		hoodStyle = custom.hood,
+		plateText = string.format("GT-%04d", math.random(0, 9999)),
+		numberText = tostring(stringHash(id .. custom.paint) % 99 + 1),
+	}
+	ctx.wx = W / 2 - ctx.TW / 2
+	if custom.neon ~= "None" then
+		ctx.neonColor = hexToColor(custom.neon)
 	end
 
-	-- Roof + pillars
-	paint("BodyPanel", V3(Wb * 0.9, 0.22, coreLen + 0.5), CF(0, H - 0.11, coreStart + coreLen / 2))
-	local pillarZs = { coreStart, coreStart + coreLen / 2, coreEnd }
-	for _, sx in { -1, 1 } do
-		for _, pz in pillarZs do
-			paint("BodyPanel", V3(0.28, glassH, 0.32), CF(sx * Wg / 2, glassMidY, pz))
-		end
-	end
-	if isPickup then
-		-- solid back of the cab below the rear window
-		paint("BodyPanel", V3(Wg + 0.28, glassH * 0.3, 0.3), CF(0, hoodTop + glassH * 0.15, coreEnd + 0.05))
-	end
+	-- body, customization, wheels ---------------------------------------------------------------------
+	local P = Designs.build(ctx)
+	Custom.apply(ctx, P)
 
-	-- Interior
-	box("Dashboard", V3(Wg - 0.3, 0.5, 0.5), CF(0, hoodTop + 0.25, coreStart + 0.35), SEAT_COLOR)
-	for _, sx in { -1, 1 } do
-		box(
-			"SeatBack",
-			V3(Wg * 0.36, glassH * 0.55, 0.3),
-			CF(sx * Wg * 0.22, hoodTop + glassH * 0.28, coreStart + coreLen * 0.66),
-			SEAT_COLOR
-		)
-		box("SeatBase", V3(Wg * 0.36, 0.35, 0.9), CF(sx * Wg * 0.22, hoodTop + 0.18, coreStart + coreLen * 0.45), SEAT_COLOR)
+	local corners: { { name: string, sx: number, z: number } } = {
+		{ name = "Wheel_FL", sx = -1, z = ctx.axF },
+		{ name = "Wheel_FR", sx = 1, z = ctx.axF },
+		{ name = "Wheel_RL", sx = -1, z = ctx.axR },
+		{ name = "Wheel_RR", sx = 1, z = ctx.axR },
+	}
+	for _, c in corners do
+		local wm: Model = Wheels.build(ctx, c.name, c.sx, c.sx * ctx.wx, c.z)
+		wm.Parent = model
 	end
 
-	-- Pickup cargo bed ----------------------------------------------------------------------
-	if isPickup then
-		local bedStart = cabinEnd
-		local bedLen = zr - bedStart
-		local bedMid = (bedStart + zr) / 2
-		box("BedLiner", V3(Wb - 0.9, 0.12, bedLen - 0.3), CF(0, lowerTop + 0.06, bedMid), RGB(38, 40, 46))
-		for _, sx in { -1, 1 } do
-			paint("BodyPanel", V3(0.35, 1.0, bedLen), CF(sx * (Wb / 2 - 0.175), lowerTop + 0.5, bedMid))
-			box(
-				"BedRail",
-				V3(0.4, 0.08, bedLen),
-				CF(sx * (Wb / 2 - 0.175), lowerTop + 1.04, bedMid),
-				CHROME,
-				{ Material = Enum.Material.Metal, Reflectance = 0.4 }
-			)
-		end
-		paint("BodyPanel", V3(Wb - 0.7, 1.0, 0.3), CF(0, lowerTop + 0.5, bedStart + 0.15))
-		paint("BodyPanel", V3(Wb, 1.0, 0.3), CF(0, lowerTop + 0.5, zr - 0.15)) -- tailgate
-		box(
-			"BedRail",
-			V3(Wb, 0.08, 0.36),
-			CF(0, lowerTop + 1.04, zr - 0.15),
-			CHROME,
-			{ Material = Enum.Material.Metal, Reflectance = 0.4 }
-		)
-	end
+	-- root attachments ---------------------------------------------------------------------------------
+	makeAttachment(root, "DriverSeat", P.driverPos)
 
-	-- Bumpers, grille, lights ----------------------------------------------------------------
-	local chromeProps: Props = { Material = Enum.Material.Metal, Reflectance = 0.45 }
-	box("Bumper", V3(W - 1.2, 0.8, 0.6), CF(0, gc + 0.4, -L / 2 + 0.3), BUMPER_COLOR)
-	box("Bumper", V3(W - 1.2, 0.8, 0.6), CF(0, gc + 0.4, L / 2 - 0.3), BUMPER_COLOR)
-	box("BumperTrim", V3(W - 1.6, 0.1, 0.64), CF(0, gc + 0.62, -L / 2 + 0.3), CHROME, chromeProps)
-	box("BumperTrim", V3(W - 1.6, 0.1, 0.64), CF(0, gc + 0.62, L / 2 - 0.3), CHROME, chromeProps)
-
-	local lightY = gc + lowerH * 0.72
-	local grilleY = gc + lowerH * 0.5
-	box("Grille", V3(Wb * 0.42, 0.55, 0.15), CF(0, grilleY, zf - 0.03), DARK)
-	box("GrilleBar", V3(Wb * 0.42 + 0.1, 0.07, 0.2), CF(0, grilleY + 0.13, zf - 0.05), CHROME, chromeProps)
-	box("GrilleBar", V3(Wb * 0.42 + 0.1, 0.07, 0.2), CF(0, grilleY - 0.13, zf - 0.05), CHROME, chromeProps)
-
-	for _, sx in { -1, 1 } do
-		box(
-			"Headlight",
-			V3(1.0, 0.5, 0.25),
-			CF(sx * (Wb / 2 - 0.75), lightY, zf - 0.02),
-			HEADLIGHT,
-			{ Material = Enum.Material.Neon }
-		)
-		box(
-			"Taillight",
-			V3(1.3, 0.45, 0.25),
-			CF(sx * (Wb / 2 - 0.8), lightY, zr + 0.02),
-			TAILLIGHT,
-			{ Material = Enum.Material.Neon }
-		)
-	end
-	box(
-		"TaillightBar",
-		V3(math.max(Wb - 3.6, 0.5), 0.14, 0.2),
-		CF(0, lightY, zr + 0.01),
-		RGB(170, 25, 35),
-		{ Material = Enum.Material.Neon }
-	)
-
-	-- License plates
-	local plateText = string.format("GT-%04d", math.random(0, 9999))
-	local plateProps: Props = { Material = SMOOTH }
-	local plateFront = box("LicensePlate", V3(1.7, 0.75, 0.1), CF(0, gc + 0.4, -L / 2 - 0.05), RGB(245, 245, 245), plateProps)
-	addPlateGui(plateFront, Enum.NormalId.Front, plateText)
-	local plateRear = box("LicensePlate", V3(1.7, 0.75, 0.1), CF(0, gc + 0.4, L / 2 + 0.05), RGB(245, 245, 245), plateProps)
-	addPlateGui(plateRear, Enum.NormalId.Back, plateText)
-
-	-- Exhaust
-	newCylinder(
-		model,
-		"Exhaust",
-		0.5,
-		0.4,
-		CF(Wb / 2 - 0.9, 0.42, L / 2 + 0.1) * ANG(0, math.pi / 2, 0),
-		CHROME,
-		chromeProps
-	)
-
-	-- Side details: mirrors, door seams, handles, trim ---------------------------------------
-	for _, sx in { -1, 1 } do
-		box("MirrorStalk", V3(0.35, 0.1, 0.15), CF(sx * (Wg / 2 + 0.2), hoodTop + 0.5, coreStart - 0.2), DARK)
-		paint("BodyPanel", V3(0.4, 0.3, 0.5), CF(sx * (Wg / 2 + 0.55), hoodTop + 0.55, coreStart - 0.2))
-
-		local seamX = sx * (Wb / 2 + 0.02)
-		for _, sz in { coreStart - 0.5, coreStart + coreLen * 0.5, coreEnd + 0.4 } do
-			box("DoorSeam", V3(0.05, lowerH * 0.9, 0.06), CF(seamX, gc + lowerH * 0.5, sz), DARK)
-		end
-		for _, hz in { coreStart + coreLen * 0.5 - 0.6, coreStart + coreLen * 0.5 + 0.6 } do
-			box("DoorHandle", V3(0.1, 0.14, 0.55), CF(sx * (Wb / 2 + 0.05), gc + lowerH * 0.82, hz), CHROME, chromeProps)
-		end
-		box("SideTrim", V3(0.06, 0.1, bodyLen * 0.9), CF(sx * (Wb / 2 + 0.03), gc + lowerH * 0.5, 0), CHROME, chromeProps)
-	end
-
-	-- Wheels + fenders ------------------------------------------------------------------------
-	local wx = W / 2 - TW / 2
-	local wz = 0.31 * L
-	for _, sx in { -1, 1 } do
-		for _, sz in { -1, 1 } do
-			local cx, cz = sx * wx, sz * wz
-			-- Tire (cylinder axis = X axis of the car, no rotation needed)
-			newCylinder(model, "Tire", TW, D, CF(cx, D / 2, cz), TIRE_COLOR)
-			-- Rim disc + hub + spokes on the outer face
-			local outerX = sx * (wx + TW / 2)
-			newCylinder(model, "Rim", 0.12, D * 0.62, CF(outerX, D / 2, cz), RIM_COLOR, chromeProps)
-			newCylinder(model, "Hub", 0.18, D * 0.24, CF(outerX + sx * 0.04, D / 2, cz), HUB_COLOR)
-			for _, a in { 0, math.rad(60), math.rad(120) } do
-				box(
-					"Spoke",
-					V3(0.1, D * 0.56, 0.2),
-					CF(outerX + sx * 0.06, D / 2, cz) * ANG(a, 0, 0),
-					SPOKE_COLOR,
-					{ Material = Enum.Material.Metal }
-				)
-			end
-			-- Wheel arch: fender slab behind the tire + cap above it
-			paint("BodyPanel", V3(0.3, D - 0.1, D + 0.2), CF(sx * (Wb / 2), (0.4 + D + 0.3) / 2, cz))
-			paint("BodyPanel", V3(TW + 0.3, 0.28, D + 0.5), CF(cx, D + 0.29, cz))
+	local exhaustPos: { Vector3 } = ctx.exhaust or { V3(-W * 0.2, 0.6, L / 2 + 0.7), V3(W * 0.2, 0.6, L / 2 + 0.7) }
+	local flames = custom.flames
+	for i = 1, 2 do
+		local att = makeAttachment(root, "Exhaust" .. i, exhaustPos[i])
+		if flames == "Orange" or flames == "Blue" then
+			makeFlame(att, flames == "Blue")
 		end
 	end
 
-	-- Welds (after everything is positioned) ---------------------------------------------------
-	for _, child in model:GetChildren() do
-		if child:IsA("BasePart") and child ~= root then
-			local weld = Instance.new("WeldConstraint")
-			weld.Part0 = root
-			weld.Part1 = child
-			weld.Parent = child
-		end
-	end
+	local smokeColor = if custom.smoke ~= "None" then hexToColor(custom.smoke) else RGB(255, 255, 255)
+	makeSmoke(makeAttachment(root, "SmokeRL", V3(-ctx.wx, 0.15, ctx.axR)), smokeColor)
+	makeSmoke(makeAttachment(root, "SmokeRR", V3(ctx.wx, 0.15, ctx.axR)), smokeColor)
 
+	-- welds + attributes -------------------------------------------------------------------------------
+	Kit.weldAll(model, root)
+
+	model:SetAttribute("WheelDiameter", ctx.D)
+	model:SetAttribute("WheelBase", ctx.axR - ctx.axF)
+	model:SetAttribute("TrackWidth", 2 * ctx.wx)
+	model:SetAttribute("RideHeight", P.gc)
 	return model
 end
 
@@ -382,7 +328,8 @@ local function recolorParts(model: Model, color: Color3)
 	end
 end
 
-local function finalizeArt(model: Model, carTypeId: string, color: Color3?): Model
+-- Enforces the Root / weld rules on an artist-made model. withVehicleData adds wheel attributes + DriverSeat if missing.
+local function finalizeArt(model: Model, carTypeId: string, color: Color3?, withVehicleData: boolean): Model
 	model.Name = carTypeId
 
 	local root: BasePart? = model.PrimaryPart
@@ -393,7 +340,7 @@ local function finalizeArt(model: Model, carTypeId: string, color: Color3?): Mod
 		r.TopSurface = Enum.SurfaceType.Smooth
 		r.BottomSurface = Enum.SurfaceType.Smooth
 		r.Size = V3(size.X, 0.2, size.Z)
-		r.CFrame = CF(cf.Position - cf.UpVector * (size.Y / 2)) * cf.Rotation
+		r.CFrame = CFrame.new(cf.Position - cf.UpVector * (size.Y / 2)) * cf.Rotation
 		r.Transparency = 1
 		r.Parent = model
 		model.PrimaryPart = r
@@ -404,13 +351,15 @@ local function finalizeArt(model: Model, carTypeId: string, color: Color3?): Mod
 		rootPart.Transparency = 1
 	end
 
-	-- Drop old welds and collect parts.
-	local parts: { BasePart } = {}
 	for _, d in model:GetDescendants() do
 		if d:IsA("WeldConstraint") then
 			d:Destroy()
 		elseif d:IsA("BasePart") and d ~= rootPart then
-			table.insert(parts, d)
+			d.Anchored = false
+			d.CanCollide = false
+			d.CanTouch = false
+			d.CanQuery = false
+			d.Massless = true
 		end
 	end
 
@@ -420,30 +369,75 @@ local function finalizeArt(model: Model, carTypeId: string, color: Color3?): Mod
 	rootPart.CanQuery = false
 	rootPart.Massless = true
 
+	local bbCF, bbSize = model:GetBoundingBox()
 	if rootPart:FindFirstChild("TopAttachment") == nil then
-		local cf, size = model:GetBoundingBox()
 		local att = Instance.new("Attachment")
 		att.Name = "TopAttachment"
-		att.Position = rootPart.CFrame:PointToObjectSpace(cf.Position + cf.UpVector * (size.Y / 2 + 2))
+		att.Position = rootPart.CFrame:PointToObjectSpace(bbCF.Position + bbCF.UpVector * (bbSize.Y / 2 + 2))
 		att.Parent = rootPart
 	end
 
-	for _, p in parts do
-		p.Anchored = false
-		p.CanCollide = false
-		p.CanTouch = false
-		p.CanQuery = false
-		p.Massless = true
-		local weld = Instance.new("WeldConstraint")
-		weld.Part0 = rootPart
-		weld.Part1 = p
-		weld.Parent = p
+	Kit.weldAll(model, rootPart)
+
+	if withVehicleData then
+		local hasWheels = true
+		for _, n in { "Wheel_FL", "Wheel_FR", "Wheel_RL", "Wheel_RR" } do
+			local wm = model:FindFirstChild(n)
+			if wm == nil or not wm:IsA("Model") or wm.PrimaryPart == nil then
+				hasWheels = false
+			end
+		end
+		if hasWheels then
+			local fl = (model:FindFirstChild("Wheel_FL") :: Model).PrimaryPart :: BasePart
+			local fr = (model:FindFirstChild("Wheel_FR") :: Model).PrimaryPart :: BasePart
+			local rl = (model:FindFirstChild("Wheel_RL") :: Model).PrimaryPart :: BasePart
+			local relFL = rootPart.CFrame:PointToObjectSpace(fl.Position)
+			local relFR = rootPart.CFrame:PointToObjectSpace(fr.Position)
+			local relRL = rootPart.CFrame:PointToObjectSpace(rl.Position)
+			if model:GetAttribute("WheelDiameter") == nil then
+				model:SetAttribute("WheelDiameter", math.max(fl.Size.Y, fl.Size.Z))
+			end
+			if model:GetAttribute("WheelBase") == nil then
+				model:SetAttribute("WheelBase", math.abs(relRL.Z - relFL.Z))
+			end
+			if model:GetAttribute("TrackWidth") == nil then
+				model:SetAttribute("TrackWidth", math.abs(relFR.X - relFL.X))
+			end
+		else
+			-- no usable wheel models: estimate from the bounding box (VehicleBuilder falls back for art without wheels)
+			if model:GetAttribute("WheelDiameter") == nil then
+				model:SetAttribute("WheelDiameter", 0.22 * bbSize.Z)
+			end
+			if model:GetAttribute("WheelBase") == nil then
+				model:SetAttribute("WheelBase", 0.6 * bbSize.Z)
+			end
+			if model:GetAttribute("TrackWidth") == nil then
+				model:SetAttribute("TrackWidth", math.max(bbSize.X - 1.2, 1))
+			end
+		end
+		if model:GetAttribute("RideHeight") == nil then
+			model:SetAttribute("RideHeight", 0.5)
+		end
+		if rootPart:FindFirstChild("DriverSeat") == nil then
+			makeAttachment(rootPart, "DriverSeat", V3(-bbSize.X * 0.22, bbSize.Y * 0.4, 0))
+		end
 	end
 
 	if color then
 		recolorParts(model, color)
 	end
 	return model
+end
+
+local function findArt(id: string): Model?
+	local models = ReplicatedStorage:FindFirstChild("Models")
+	if models then
+		local art = models:FindFirstChild("Car_" .. id)
+		if art and art:IsA("Model") then
+			return art
+		end
+	end
+	return nil
 end
 
 ------------------------------------------------------------------------------------------------
@@ -454,26 +448,41 @@ function CarBuilder.recolor(model: Model, color: Color3)
 	recolorParts(model, color)
 end
 
-function CarBuilder.build(carTypeId: string, opts: { color: Color3? }?): Model
-	local id = carTypeId
-	local def = CarTypes.byId[id]
+local function resolveType(carTypeId: string): (string, any)
+	local def = CarTypes.byId[carTypeId]
 	if def == nil then
-		id = "Sedan"
-		def = CarTypes.byId[id]
+		return "Sedan", CarTypes.byId.Sedan
 	end
+	return carTypeId, def
+end
+
+function CarBuilder.build(carTypeId: string, opts: { color: Color3? }?): Model
+	local id, def = resolveType(carTypeId)
 	local color: Color3? = if opts then opts.color else nil
 
-	local models = ReplicatedStorage:FindFirstChild("Models")
-	if models then
-		local art = models:FindFirstChild("Car_" .. id)
-		if art and art:IsA("Model") then
-			return finalizeArt(art:Clone(), id, color)
-		end
+	local art = findArt(id)
+	if art then
+		return finalizeArt(art:Clone(), id, color, false)
 	end
 
 	local colors: { Color3 } = def.colors
 	local paintColor: Color3 = color or colors[math.random(1, #colors)]
-	return buildProcedural(id, def, paintColor)
+	local custom = resolveCustom(nil)
+	custom.wheel = CUSTOMER_WHEEL[id] or "Classic"
+	return buildProcedural(id, def, custom, paintColor, false, false)
+end
+
+function CarBuilder.buildCustom(carTypeId: string, custom: { [string]: string }?): Model
+	local id, def = resolveType(carTypeId)
+	local resolved = resolveCustom(custom)
+	local paintColor = hexToColor(resolved.paint)
+
+	local art = findArt(id)
+	if art then
+		return finalizeArt(art:Clone(), id, paintColor, true)
+	end
+
+	return buildProcedural(id, def, resolved, paintColor, true, true)
 end
 
 return CarBuilder

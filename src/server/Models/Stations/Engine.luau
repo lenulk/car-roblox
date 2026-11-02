@@ -27,7 +27,7 @@ return function(level: number, accent: Color3, opts: { [string]: any }?): Model
 	end
 
 	------------------------------------------------------------ rolling tool chest (left)
-	local chestX, chestZ = -3.8, 1.6
+	local chestX, chestZ = -3.7, 1.6
 	for _, sx in { -1, 1 } do
 		for _, sz in { -1, 1 } do
 			cyl("ChestWheel", "X", 0.18, 0.4, Vector3.new(chestX + sx * 1.0, F + 0.2, chestZ + sz * 0.6), rubber, {})
@@ -45,7 +45,7 @@ return function(level: number, accent: Color3, opts: { [string]: any }?): Model
 	ModelKit.neon(model, "ChestAccentLED", Vector3.new(2.3, 0.06, 0.04), CFrame.new(chestX, 3.7, chestZ - 0.93), accent)
 	-- side handle
 	for _, sx in { -1, 1 } do
-		cyl("ChestSideBar", "Z", 1.0, 0.08, Vector3.new(chestX + sx * 1.3, 3.0, chestZ), tier.metalColor, chromeProps)
+		cyl("ChestSideBar", "Z", 1.0, 0.08, Vector3.new(chestX + sx * 1.26, 3.0, chestZ), tier.metalColor, chromeProps)
 	end
 	-- hammer resting on the chest
 	cyl("HammerHandle", "X", 1.1, 0.12, Vector3.new(chestX + 0.3, 3.95, chestZ - 0.3), Color3.fromRGB(150, 100, 56), { Material = Enum.Material.Wood })
