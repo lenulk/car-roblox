@@ -20,6 +20,10 @@ local UnlockService = require(script.Parent.UnlockService)
 local EconomyService = require(script.Parent.EconomyService)
 local TrafficService = require(script.Parent.TrafficService)
 local RepairService = require(script.Parent.RepairService)
+local HireService = require(script.Parent.HireService)
+local MapBuilder = require(script.Parent.MapBuilder)
+
+local WASH_SLOW_SPEED = 6
 
 local CustomerService = {}
 
@@ -49,15 +53,14 @@ local function setState(customer: Customer, state: string)
 	customer.model:SetAttribute("State", state)
 end
 
-local function stationLevel(_player: Player, _stationId: string): number
-	return 1 -- station upgrades arrive in phase 2
+-- Upgrade level of the bay doing the work (problems marked "any" use whichever bay they are in).
+local function bayLevel(player: Player, bayStation: string): number
+	return math.max(1, UnlockService.stationLevel(player, bayStation))
 end
 
-local function repairTimeFor(player: Player, problemId: string, bayStation: string): number
+local function repairTimeFor(player: Player, bayStation: string, problemId: string): number
 	local problem = Problems.byId[problemId]
-	local stationId = if problem.station == "any" then bayStation else problem.station
-	local level = stationLevel(player, stationId)
-	return problem.repairTime * Stations.LEVELS[level].timeMult
+	return problem.repairTime * Stations.LEVELS[bayLevel(player, bayStation)].timeMult
 end
 
 local function availableProblems(player: Player): { string }
@@ -79,13 +82,24 @@ local function availableProblems(player: Player): { string }
 	return result
 end
 
-local function pickCarType(): string
+local function starsOf(player: Player): number
+	local data = PlayerData.get(player)
+	return if data then EconomyService.starLevel(data.starPoints) else 0
+end
+
+-- Weighted pick among car types the garage's star rating unlocks (fancier cars at more stars).
+local function pickCarType(player: Player): string
+	local stars = starsOf(player)
+	local eligible = {}
 	local total = 0
 	for _, carType in CarTypes.list do
-		total += carType.weight
+		if (carType.minStars or 0) <= stars then
+			table.insert(eligible, carType)
+			total += carType.weight
+		end
 	end
 	local roll = math.random() * total
-	for _, carType in CarTypes.list do
+	for _, carType in eligible do
 		roll -= carType.weight
 		if roll <= 0 then
 			return carType.id
@@ -95,9 +109,43 @@ local function pickCarType(): string
 end
 
 local function spawnInterval(player: Player): number
-	local data = PlayerData.get(player)
-	local stars = if data then EconomyService.starLevel(data.starPoints) else 0
-	return math.max(Game.SPAWN_INTERVAL_MIN, Game.SPAWN_INTERVAL_BASE - stars * Game.SPAWN_INTERVAL_PER_STAR)
+	local interval = math.max(Game.SPAWN_INTERVAL_MIN, Game.SPAWN_INTERVAL_BASE - starsOf(player) * Game.SPAWN_INTERVAL_PER_STAR)
+	local reception = HireService.receptionistLevel(player)
+	if reception > 0 then
+		interval *= Game.RECEPTION_SPAWN_MULT[reception] or 1
+	end
+	return interval
+end
+
+----------------------------------------------------------------------------------------------------
+-- Car wash: foam on while a car rolls through, bonus on the bill
+----------------------------------------------------------------------------------------------------
+
+local foamUsers: { [number]: number } = {}
+
+local function setFoam(plotIndex: number, delta: number)
+	foamUsers[plotIndex] = math.max(0, (foamUsers[plotIndex] or 0) + delta)
+	local wash = MapBuilder.getPlot(plotIndex):FindFirstChild("Unlockables")
+	wash = wash and wash:FindFirstChild("CarWash")
+	local station = wash and wash:FindFirstChild("Station")
+	if not station then
+		return
+	end
+	local on = foamUsers[plotIndex] > 0
+	for _, d in station:GetDescendants() do
+		if d:IsA("ParticleEmitter") and d.Name == "WashFoam" then
+			d.Enabled = on
+		end
+	end
+end
+
+local function hasWash(player: Player): boolean
+	return UnlockService.isOwned(player, "CarWash")
+end
+
+local function washBonusFraction(player: Player): number
+	local level = UnlockService.level(player, "CarWash")
+	return if level > 0 then Stations.WASH_BONUS[level] or 0 else 0
 end
 
 local function removeCustomer(state: PlotState, customer: Customer)
@@ -115,17 +163,68 @@ end
 
 local dispatch: (plotIndex: number) -> ()
 
-local function pay(plotIndex: number, state: PlotState, customer: Customer, bayIndex: number, startedAt: number, repairTime: number)
+-- Drives a finished car out: bay -> exit lane (-> through the wash) -> connector -> ring.
+local function driveAway(plotIndex: number, state: PlotState, customer: Customer, bayIndex: number, washed: boolean)
+	local model = customer.model
+	local bx = Layout.BAYS[bayIndex].car.Position.X
+	local ex = Layout.EXIT_LANE_X
+	local function w(x: number, z: number): Vector3
+		return Layout.pointToWorld(plotIndex, Vector3.new(x, 0, z))
+	end
+	local ok = TrafficService.drive(model, { w(bx, Layout.BAY_LANE_Z), w(ex, Layout.BAY_LANE_Z) }, Game.LOT_SPEED)
+	if ok and washed then
+		local washZ = Layout.STATIONS.wash.Z
+		ok = TrafficService.drive(model, { w(ex, washZ + 6) }, Game.LOT_SPEED)
+		if ok then
+			setFoam(plotIndex, 1)
+			ok = TrafficService.drive(model, { w(ex, washZ - 6) }, WASH_SLOW_SPEED)
+			setFoam(plotIndex, -1)
+			if ok then
+				Remotes.get("Effect"):FireClient(state.player, "Wash", w(ex, washZ) + Vector3.new(0, 4, 0))
+			end
+		end
+	end
+	if ok then
+		local a = Layout.plotAngle(plotIndex)
+		local road = { w(ex, Layout.CONNECTOR_RING_Z) }
+		for _, p in Layout.ringArc(a + math.rad(4), a + math.rad(70)) do
+			table.insert(road, p)
+		end
+		TrafficService.drive(model, road, Game.ROAD_SPEED)
+	end
+	if state.customers[customer] then
+		removeCustomer(state, customer)
+	end
+end
+
+local function pay(
+	plotIndex: number,
+	state: PlotState,
+	customer: Customer,
+	bayIndex: number,
+	bayStation: string,
+	startedAt: number,
+	repairTime: number
+)
 	local player = state.player
 	local problem = Problems.byId[customer.problemId]
 	local carType = CarTypes.byId[customer.carTypeId]
-	local level = stationLevel(player, problem.station)
+	local level = bayLevel(player, bayStation)
 	local amount = math.floor(problem.basePay * carType.payMult * Stations.LEVELS[level].payMult + 0.5)
-	local fast = os.clock() - startedAt <= repairTime * Game.TIP_WINDOW_FACTOR + Game.TIP_WINDOW_BONUS
-	local tip = if fast then math.max(1, math.floor(amount * Game.TIP_PERCENT + 0.5)) else 0
 
-	EconomyService.earn(player, amount + tip)
-	EconomyService.addStarPoint(player)
+	local fast = os.clock() - startedAt <= repairTime * Game.TIP_WINDOW_FACTOR + Game.TIP_WINDOW_BONUS
+	local tipPercent = Game.TIP_PERCENT
+	local reception = HireService.receptionistLevel(player)
+	if reception > 0 then
+		tipPercent += Game.RECEPTION_TIP_BONUS[reception] or 0
+	end
+	local tip = if fast then math.max(1, math.floor(amount * tipPercent + 0.5)) else 0
+
+	local washed = hasWash(player)
+	local washBonus = if washed then math.floor(amount * washBonusFraction(player) + 0.5) else 0
+
+	local earned = EconomyService.earn(player, amount + tip + washBonus)
+	EconomyService.addStarPoint(player, if carType.vip then Game.VIP_STAR_POINTS else 1)
 	PlayerData.update(player, function(data)
 		data.carsRepaired += 1
 		if data.tutorialStep == 1 then
@@ -135,8 +234,8 @@ local function pay(plotIndex: number, state: PlotState, customer: Customer, bayI
 
 	local root = customer.model.PrimaryPart
 	local position = if root then root.Position + Vector3.new(0, 6, 0) else Layout.pointToWorld(plotIndex, Vector3.zero)
-	Remotes.get("Effect"):FireClient(player, "Cash", position, "+" .. Format.money(amount + tip))
-	Remotes.get("Notify"):FireClient(player, "notify_repaired", { Format.money(amount) })
+	Remotes.get("Effect"):FireClient(player, "Cash", position, "+" .. Format.money(earned))
+	Remotes.get("Notify"):FireClient(player, "notify_repaired", { Format.money(earned) })
 	if tip > 0 then
 		Remotes.get("Notify"):FireClient(player, "notify_tip", { Format.money(tip) })
 	end
@@ -146,16 +245,7 @@ local function pay(plotIndex: number, state: PlotState, customer: Customer, bayI
 	state.bays[bayIndex] = nil
 	customer.bayIndex = nil
 	dispatch(plotIndex)
-
-	local path = Layout.departurePath(plotIndex, bayIndex)
-	local lotPath = { path[1], path[2] }
-	local roadPath = table.move(path, 3, #path, 1, {})
-	if TrafficService.drive(customer.model, lotPath, Game.LOT_SPEED) then
-		TrafficService.drive(customer.model, roadPath, Game.ROAD_SPEED)
-	end
-	if state.customers[customer] then
-		removeCustomer(state, customer)
-	end
+	driveAway(plotIndex, state, customer, bayIndex, washed)
 end
 
 local function moveToBay(plotIndex: number, state: PlotState, customer: Customer, bayIndex: number, bayStation: string)
@@ -178,7 +268,7 @@ local function moveToBay(plotIndex: number, state: PlotState, customer: Customer
 
 	setState(customer, "InBay")
 	PlayerData.push(state.player) -- the guide arrow may now point at this car
-	local repairTime = repairTimeFor(state.player, customer.problemId, bayStation)
+	local repairTime = repairTimeFor(state.player, bayStation, customer.problemId)
 	local startedAt = os.clock()
 	RepairService.attach({
 		model = customer.model,
@@ -189,7 +279,7 @@ local function moveToBay(plotIndex: number, state: PlotState, customer: Customer
 		repairTime = repairTime,
 		onComplete = function()
 			if state.alive and state.customers[customer] then
-				pay(plotIndex, state, customer, bayIndex, startedAt, repairTime)
+				pay(plotIndex, state, customer, bayIndex, bayStation, startedAt, repairTime)
 			end
 		end,
 	})
@@ -240,12 +330,16 @@ local function spawnCustomer(plotIndex: number, state: PlotState)
 		return
 	end
 	local problemId = problems[math.random(1, #problems)]
-	local carTypeId = pickCarType()
+	local carTypeId = pickCarType(state.player)
 	local model = CarBuilder.build(carTypeId)
 	model:SetAttribute("PlotIndex", plotIndex)
 	model:SetAttribute("OwnerUserId", state.player.UserId)
 	model:SetAttribute("ProblemId", problemId)
 	model:SetAttribute("RepairProgress", 0)
+	if CarTypes.byId[carTypeId].vip then
+		model:SetAttribute("VIP", true)
+		Remotes.get("Notify"):FireClient(state.player, "notify_vip_arrived")
+	end
 
 	local customer: Customer = {
 		model = model,
@@ -308,6 +402,14 @@ local function stopPlot(plotIndex: number)
 	for customer in state.customers do
 		removeCustomer(state, customer)
 	end
+	foamUsers[plotIndex] = 0
+	setFoam(plotIndex, 0)
+end
+
+-- Restarts customers for a plot (used after a rebirth resets the garage).
+function CustomerService.restart(player: Player, plotIndex: number)
+	stopPlot(plotIndex)
+	startPlot(player, plotIndex)
 end
 
 function CustomerService.init()

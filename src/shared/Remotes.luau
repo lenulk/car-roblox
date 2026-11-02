@@ -1,16 +1,7 @@
 --!strict
 -- Every network call in the game is declared here. Server calls Remotes.init() once at startup;
 -- any script can then call Remotes.get(name) (clients wait for the folder to replicate).
---
--- Server -> Client
---   DataChanged  (snapshot: Snapshot)                 full player snapshot, see docs/CONTRACT.md
---   Notify       (key: string, args: {any}?)           toast message; key is a Config/Strings key
---   OpenUI       (uiName: "Hire")                      ask the client to open a window
---   Effect       (effect: string, position: Vector3, text: string?)   "Unlock" | "Cash" | "Repair" one-shot visuals
--- Client -> Server
---   HireEmployee (role: string) -> (ok: boolean, messageKey: string)
---   SetSetting   (key: "lang" | "music", value: any)
---   RequestSnapshot ()                                 client asks for a fresh DataChanged once it is listening
+-- Full argument/return contract: docs/CONTRACT.md §6 and §13.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -18,13 +9,26 @@ local RunService = game:GetService("RunService")
 local FOLDER_NAME = "Remotes"
 
 local DEFINITIONS: { [string]: string } = {
-	DataChanged = "RemoteEvent",
-	Notify = "RemoteEvent",
-	OpenUI = "RemoteEvent",
-	Effect = "RemoteEvent",
-	HireEmployee = "RemoteFunction",
-	SetSetting = "RemoteEvent",
-	RequestSnapshot = "RemoteEvent",
+	-- Server -> client
+	DataChanged = "RemoteEvent", -- (snapshot)
+	Notify = "RemoteEvent", -- (key, args?)
+	OpenUI = "RemoteEvent", -- (uiName, arg?)
+	Effect = "RemoteEvent", -- (effect, position, text?)
+	-- Client -> server
+	RequestSnapshot = "RemoteEvent", -- ()
+	SetSetting = "RemoteEvent", -- (key, value)
+	HireEmployee = "RemoteFunction", -- (role) -> ok, key
+	UpgradeEmployee = "RemoteFunction", -- (slot) -> ok, key
+	Upgrade = "RemoteFunction", -- (unlockId) -> ok, key
+	ClaimDaily = "RemoteFunction", -- () -> ok, key
+	Rebirth = "RemoteFunction", -- () -> ok, key
+	BuyTheme = "RemoteFunction", -- (themeId) -> ok, key   (buys if needed, then applies)
+	BuyCar = "RemoteFunction", -- (carId) -> ok, key
+	SelectCar = "RemoteFunction", -- (carId) -> ok, key
+	Customize = "RemoteFunction", -- (carId, category, optionId) -> ok, key (buys if needed, then applies)
+	UpgradeCar = "RemoteFunction", -- (carId, part) -> ok, key
+	DriveCar = "RemoteFunction", -- (carId) -> ok, key
+	ReturnCar = "RemoteEvent", -- ()
 }
 
 local Remotes = {}

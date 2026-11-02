@@ -11,18 +11,30 @@ local Remotes = require(Shared.Remotes)
 local Game = require(Shared.Config.Game)
 
 export type Employee = { role: string, level: number, slot: string }
+export type CarSave = { custom: { [string]: string }, upgrades: { [string]: number } }
 export type Data = {
 	version: number,
 	money: number,
 	safe: number,
 	starPoints: number,
 	carsRepaired: number,
+	totalEarned: number,
 	unlocks: { [string]: boolean },
+	levels: { [string]: number },
+	stock: { [string]: number },
 	employees: { Employee },
 	freeHireUsed: boolean,
 	tutorialStep: number,
 	settings: { lang: string, music: boolean },
 	lastOnline: number,
+	dailyStreak: number,
+	lastDailyDay: number,
+	rebirths: number,
+	theme: string,
+	ownedThemes: { [string]: boolean },
+	cars: { [string]: CarSave },
+	selectedCar: string?,
+	ownedParts: { [string]: boolean },
 }
 
 type Profile = {
@@ -45,17 +57,28 @@ local MAX_RETRIES = 3
 local function defaultData(player: Player): Data
 	local lang = if string.sub(player.LocaleId, 1, 2) == "th" then "th" else "en"
 	return {
-		version = 1,
+		version = 2,
 		money = Game.STARTING_MONEY,
 		safe = 0,
 		starPoints = 0,
 		carsRepaired = 0,
+		totalEarned = 0,
 		unlocks = {},
+		levels = {},
+		stock = {},
 		employees = {},
 		freeHireUsed = false,
 		tutorialStep = 1,
 		settings = { lang = lang, music = true },
 		lastOnline = 0,
+		dailyStreak = 0,
+		lastDailyDay = 0,
+		rebirths = 0,
+		theme = "Classic",
+		ownedThemes = { Classic = true },
+		cars = {},
+		selectedCar = nil,
+		ownedParts = {},
 	}
 end
 

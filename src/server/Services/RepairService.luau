@@ -10,6 +10,20 @@ local Game = require(Shared.Config.Game)
 
 local HireService = require(script.Parent.HireService)
 local EmployeeService = require(script.Parent.EmployeeService)
+local GamePassService = require(script.Parent.GamePassService)
+
+-- Staff work speed: base by level × manager bonus × FastStaff pass.
+local function staffSpeed(player: Player, level: number): number
+	local speed = Game.MECHANIC_SPEED[level] or Game.MECHANIC_SPEED[1]
+	local manager = HireService.managerLevel(player)
+	if manager > 0 then
+		speed *= 1 + (Game.MANAGER_SPEED[manager] or 0)
+	end
+	if GamePassService.owns(player, "FastStaff") then
+		speed *= GamePassService.value("FastStaff")
+	end
+	return speed
+end
 
 local RepairService = {}
 
@@ -120,8 +134,7 @@ local function step(dt: number)
 					pcall(EmployeeService.setWorking, npc, true)
 				end
 			end
-			local speed = Game.MECHANIC_SPEED[level] or Game.MECHANIC_SPEED[1]
-			job.progress += dt * speed / job.repairTime
+			job.progress += dt * staffSpeed(job.player, level) / job.repairTime
 			if job.progress >= 1 then
 				finish(job)
 				continue

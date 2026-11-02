@@ -2,7 +2,6 @@
 -- Settings panel: language + music. Toggle from anywhere with Settings.toggle().
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local SoundService = game:GetService("SoundService")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Remotes: any = require(Shared:WaitForChild("Remotes") :: ModuleScript)
@@ -10,6 +9,7 @@ local Client = (script.Parent :: Instance).Parent :: Instance
 local ClientState: any = require(Client:WaitForChild("ClientState") :: ModuleScript)
 local Theme: any = require(Client:WaitForChild("Theme") :: ModuleScript)
 local Localizer: any = require((script.Parent :: Instance):WaitForChild("Localizer") :: ModuleScript)
+local Music: any = require((script.Parent :: Instance):WaitForChild("Music") :: ModuleScript)
 
 local Settings = {}
 
@@ -117,32 +117,6 @@ function Settings.start()
 		m.close()
 	end)
 
-	-- Music: play / pause a SoundService.Music sound if the game has one.
-	local musicWanted: boolean? = nil
-	local function applyMusic()
-		if musicWanted == nil then
-			return
-		end
-		local sound = SoundService:FindFirstChild("Music")
-		if not sound or not sound:IsA("Sound") then
-			return
-		end
-		if musicWanted then
-			if not sound.IsPlaying then
-				sound:Play()
-			end
-		else
-			if sound.IsPlaying then
-				sound:Pause()
-			end
-		end
-	end
-	SoundService.ChildAdded:Connect(function(child)
-		if child.Name == "Music" then
-			task.defer(applyMusic)
-		end
-	end)
-
 	ClientState.onChanged(function(snapshot: any)
 		local settings = snapshot.settings
 		local lang = if settings and settings.lang then settings.lang else ClientState.lang()
@@ -151,10 +125,10 @@ function Settings.start()
 		styleChoice(enButton, lang == "en")
 		styleChoice(onButton, music)
 		styleChoice(offButton, not music)
+		-- Music.luau owns the Sound under SoundService; keep it in step with the setting.
 		if settings and settings.music ~= nil then
-			musicWanted = settings.music == true
+			Music.setWanted(settings.music == true)
 		end
-		applyMusic()
 	end)
 end
 

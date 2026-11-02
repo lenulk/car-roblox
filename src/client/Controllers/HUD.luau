@@ -1,19 +1,49 @@
 --!strict
--- Top-center pill: money (animated count-up) + star rating with progress bar. Gear button opens Settings.
+-- Top-center pill: money (animated count-up) + star rating with progress bar, a multiplier badge under the
+-- money pill (hidden at x1), and on the right: the gear button (Settings) with a stack of round icon buttons
+-- under it: Daily (red dot when claimable), Themes, Rebirth (glows when possible), Shop (only if a pass exists).
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TweenService = game:GetService("TweenService")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Format: any = require(Shared:WaitForChild("Format") :: ModuleScript)
 local GameConfig: any = require(Shared:WaitForChild("Config"):WaitForChild("Game") :: ModuleScript)
+local GamePasses: any = require(Shared:WaitForChild("Config"):WaitForChild("GamePasses") :: ModuleScript)
 local Client = (script.Parent :: Instance).Parent :: Instance
 local ClientState: any = require(Client:WaitForChild("ClientState") :: ModuleScript)
 local Theme: any = require(Client:WaitForChild("Theme") :: ModuleScript)
-local Settings: any = require((script.Parent :: Instance):WaitForChild("Settings") :: ModuleScript)
+local Controllers = script.Parent :: Instance
+local Localizer: any = require(Controllers:WaitForChild("Localizer") :: ModuleScript)
+local Settings: any = require(Controllers:WaitForChild("Settings") :: ModuleScript)
+local Daily: any = require(Controllers:WaitForChild("Daily") :: ModuleScript)
+local Themes: any = require(Controllers:WaitForChild("Themes") :: ModuleScript)
+local Rebirth: any = require(Controllers:WaitForChild("Rebirth") :: ModuleScript)
+local Shop: any = require(Controllers:WaitForChild("Shop") :: ModuleScript)
 
 local HUD = {}
 
 local STAR_COUNT = 5
+
+-- 1.5 -> "x1.5", 2 -> "x2"
+local function formatMultiplier(value: number): string
+	return "x" .. tostring(math.floor(value * 100 + 0.5) / 100)
+end
+
+-- True when at least one game pass has a real id (otherwise the Shop button stays hidden).
+local function anyGamePass(): boolean
+	local order: any = GamePasses.order
+	if type(order) ~= "table" then
+		return false
+	end
+	for _, name in order do
+		local entry: any = GamePasses[name]
+		if type(entry) == "table" and type(entry.id) == "number" and entry.id ~= 0 then
+			return true
+		end
+	end
+	return false
+end
 
 function HUD.start()
 	local C = Theme.colors
@@ -183,9 +213,202 @@ function HUD.start()
 		Settings.toggle()
 	end)
 
+	----------------------------------------------------------------- multiplier badge
+	local badgeContainer, badgeBody = Theme.panel({
+		Name = "Multiplier",
+		Position = UDim2.new(0, 14, 1, -4),
+		Size = UDim2.fromOffset(78, 28),
+		Radius = 14,
+		ZIndex = 3,
+		Visible = false,
+	}, row)
+	local badgeStroke = badgeBody:FindFirstChildOfClass("UIStroke")
+	if badgeStroke then
+		badgeStroke.Color = C.star
+		badgeStroke.Transparency = 0.2
+	end
+	local badgeLabel = Theme.label({
+		Name = "Value",
+		Size = UDim2.fromScale(1, 1),
+		TextScaled = true,
+		TextColor3 = C.star,
+	}, badgeBody)
+	Theme.fitText(badgeLabel, 12, 18)
+	local lastMultiplier = 1
+
+	local function setMultiplier(value: number)
+		local shown = math.abs(value - 1) > 0.001
+		badgeContainer.Visible = shown
+		if not shown then
+			lastMultiplier = value
+			return
+		end
+		badgeLabel.Text = formatMultiplier(value)
+		if math.abs(value - lastMultiplier) > 0.001 then
+			badgeContainer.Size = UDim2.fromOffset(94, 34)
+			Theme.tween(badgeContainer, { Size = UDim2.fromOffset(78, 28) }, 0.5, Enum.EasingStyle.Back)
+		end
+		lastMultiplier = value
+	end
+
+	----------------------------------------------------------------- side buttons
+	local stack = Theme.new("Frame", {
+		Name = "SideButtons",
+		BackgroundTransparency = 1,
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.new(1, -12, 0, 78),
+		Size = UDim2.fromOffset(68, 10),
+		AutomaticSize = Enum.AutomaticSize.Y,
+	}, root)
+	Theme.list(stack, Enum.FillDirection.Vertical, 6, Enum.HorizontalAlignment.Center, Enum.VerticalAlignment.Top)
+
+	-- item: { button, circle, icon, caption, stroke }
+	local sideItems: { any } = {}
+
+	local function makeSideButton(name: string, glyph: string, captionKey: string, order: number, onPress: () -> ()): any
+		local button = Theme.new("TextButton", {
+			Name = name,
+			BackgroundTransparency = 1,
+			Text = "",
+			AutoButtonColor = false,
+			Size = UDim2.fromOffset(68, 76),
+			LayoutOrder = order,
+		}, stack)
+
+		local circle = Theme.new("Frame", {
+			Name = "Circle",
+			AnchorPoint = Vector2.new(0.5, 0),
+			Position = UDim2.fromScale(0.5, 0),
+			Size = UDim2.fromOffset(56, 56),
+			BackgroundColor3 = C.panel,
+			BackgroundTransparency = Theme.panelTransparency,
+		}, button)
+		Theme.corner(circle, 28)
+		local stroke = Theme.stroke(circle, C.stroke, 1.5, 0.6)
+
+		local icon = Theme.label({
+			Name = "Icon",
+			Size = UDim2.fromScale(1, 1),
+			Text = glyph,
+			TextSize = 28,
+		}, circle)
+
+		local caption = Theme.label({
+			Name = "Caption",
+			AnchorPoint = Vector2.new(0.5, 0),
+			Position = UDim2.new(0.5, 0, 0, 58),
+			Size = UDim2.new(1, 0, 0, 16),
+			Font = Theme.fontMedium,
+			TextSize = 13,
+			TextStrokeColor3 = C.black,
+			TextStrokeTransparency = 0.45,
+		}, button)
+		Localizer.bind(caption, captionKey)
+
+		-- tap feedback: the circle dips and springs back
+		local pressScale = Instance.new("UIScale")
+		pressScale.Parent = circle
+		button.Activated:Connect(function()
+			Theme.tween(pressScale, { Scale = 0.88 }, 0.07)
+			task.delay(0.07, function()
+				Theme.tween(pressScale, { Scale = 1 }, 0.25, Enum.EasingStyle.Back)
+			end)
+			onPress()
+		end)
+
+		local item = { button = button, circle = circle, icon = icon, caption = caption, stroke = stroke }
+		table.insert(sideItems, item)
+		return item
+	end
+
+	local dailyItem = makeSideButton("Daily", "📅", "hud_daily", 1, function()
+		Daily.open()
+	end)
+	local themesItem = makeSideButton("Themes", "🎨", "hud_themes", 2, function()
+		Themes.open()
+	end)
+	local rebirthItem = makeSideButton("Rebirth", "♻️", "hud_rebirth", 3, function()
+		Rebirth.open()
+	end)
+	local shopItem = makeSideButton("Shop", "🛒", "hud_shop", 4, function()
+		Shop.open()
+	end)
+	shopItem.button.Visible = anyGamePass()
+
+	-- red "claimable" dot on the Daily button, gently pulsing
+	local dailyDot = Theme.new("Frame", {
+		Name = "Dot",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.84, 0.16),
+		Size = UDim2.fromOffset(18, 18),
+		BackgroundColor3 = C.danger,
+		Visible = false,
+		ZIndex = 5,
+	}, dailyItem.circle)
+	Theme.corner(dailyDot, 9)
+	Theme.stroke(dailyDot, C.text, 2, 0)
+	local dotScale = Instance.new("UIScale")
+	dotScale.Parent = dailyDot
+	TweenService:Create(dotScale, TweenInfo.new(0.7, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), { Scale = 1.25 }):Play()
+
+	-- Rebirth glow while a rebirth is possible
+	local rebirthGlow: Tween? = nil
+	local glowing = false
+	local function setRebirthGlow(on: boolean)
+		if on == glowing then
+			return
+		end
+		glowing = on
+		if rebirthGlow then
+			rebirthGlow:Cancel()
+			rebirthGlow = nil
+		end
+		if on then
+			rebirthItem.circle.BackgroundColor3 = Color3.fromRGB(86, 66, 20)
+			rebirthItem.stroke.Color = C.star
+			rebirthItem.stroke.Thickness = 2.5
+			rebirthItem.stroke.Transparency = 0
+			local tween = TweenService:Create(
+				rebirthItem.stroke,
+				TweenInfo.new(0.8, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
+				{ Thickness = 6, Transparency = 0.5 }
+			)
+			rebirthGlow = tween
+			tween:Play()
+		else
+			rebirthItem.circle.BackgroundColor3 = C.panel
+			rebirthItem.stroke.Color = C.stroke
+			rebirthItem.stroke.Thickness = 1.5
+			rebirthItem.stroke.Transparency = 0.6
+		end
+	end
+
+	-- phones: a smaller stack
+	Theme.onViewport(function()
+		local compact = Theme.isCompact()
+		local circleSize = if compact then 46 else 56
+		local itemWidth = if compact then 60 else 68
+		local itemHeight = circleSize + (if compact then 18 else 20)
+		stack.Size = UDim2.fromOffset(itemWidth, 10)
+		stack.Position = UDim2.new(1, -12, 0, if compact then 74 else 78)
+		for _, item in sideItems do
+			item.button.Size = UDim2.fromOffset(itemWidth, itemHeight)
+			item.circle.Size = UDim2.fromOffset(circleSize, circleSize)
+			item.circle.Position = UDim2.fromScale(0.5, 0)
+			item.icon.TextSize = if compact then 23 else 28
+			item.caption.Position = UDim2.new(0.5, 0, 0, circleSize + 2)
+			item.caption.TextSize = if compact then 11 else 13
+		end
+	end)
+
 	ClientState.onChanged(function(snapshot: any)
 		setMoney(snapshot.money or 0)
 		setStars(snapshot.starLevel or 0, snapshot.starPoints or 0, snapshot.nextStarAt)
+		setMultiplier(if type(snapshot.multiplier) == "number" then snapshot.multiplier else 1)
+		local daily: any = snapshot.daily
+		dailyDot.Visible = type(daily) == "table" and daily.available == true
+		local rebirth: any = snapshot.rebirth
+		setRebirthGlow(type(rebirth) == "table" and rebirth.canRebirth == true)
 	end)
 end
 

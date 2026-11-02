@@ -1,5 +1,6 @@
 --!strict
 -- Floating info card above each of the local player's customer cars: problem, state, repair progress.
+-- VIP cars (attribute VIP = true) get a gold border and a "VIP" tag.
 
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
@@ -56,7 +57,27 @@ function CarBillboards.start()
 				Size = UDim2.fromScale(1, 1),
 			}, gui)
 			Theme.corner(card, 12)
-			Theme.stroke(card, C.stroke, 1.5, 0.6)
+			local cardStroke = Theme.stroke(card, C.stroke, 1.5, 0.6)
+
+			-- VIP tag (shown only for cars with attribute VIP = true); it sits on the card's top edge.
+			local vipTag = Theme.new("Frame", {
+				Name = "VipTag",
+				AnchorPoint = Vector2.new(1, 0.5),
+				Position = UDim2.new(1, -6, 0, 0),
+				Size = UDim2.fromOffset(62, 22),
+				BackgroundColor3 = C.star,
+				Visible = false,
+				ZIndex = 3,
+			}, card)
+			Theme.corner(vipTag, 11)
+			Theme.stroke(vipTag, Color3.fromRGB(150, 100, 10), 1.5, 0.3)
+			Theme.label({
+				Size = UDim2.fromScale(1, 1),
+				Text = "⭐ VIP",
+				TextSize = 14,
+				TextColor3 = Color3.fromRGB(70, 44, 0),
+				ZIndex = 4,
+			}, vipTag)
 
 			local problemLabel = Theme.label({
 				Name = "Problem",
@@ -107,6 +128,13 @@ function CarBillboards.start()
 				local problemId = car:GetAttribute("ProblemId")
 				local state = car:GetAttribute("State")
 				local problemName = if type(problemId) == "string" then Localizer.t("problem_" .. problemId) else ""
+				local vip = car:GetAttribute("VIP") == true
+				vipTag.Visible = vip
+				cardStroke.Color = if vip then C.star else C.stroke
+				cardStroke.Thickness = if vip then 3 else 1.5
+				cardStroke.Transparency = if vip then 0 else 0.6
+				card.BackgroundColor3 = if vip then Color3.fromRGB(44, 36, 16) else C.panel
+				problemLabel.TextColor3 = if vip then C.star else C.text
 				problemLabel.Text = "🔧 " .. problemName
 				stateLabel.Text = if type(state) == "string" then Localizer.t("car_state_" .. state) else ""
 				track.Visible = state == "InBay"
@@ -115,7 +143,7 @@ function CarBillboards.start()
 			entry.update = update
 
 			local conns: { RBXScriptConnection } = entry.conns
-			for _, attribute in { "OwnerUserId", "ProblemId", "State" } do
+			for _, attribute in { "OwnerUserId", "ProblemId", "State", "VIP" } do
 				table.insert(conns, car:GetAttributeChangedSignal(attribute):Connect(update))
 			end
 			table.insert(conns, car:GetAttributeChangedSignal("RepairProgress"):Connect(updateProgress))

@@ -1,0 +1,204 @@
+--!strict
+-- Extra strings for the tuning garage UI (src/client/Controllers/Tuning.luau). Merged into Strings.luau at load.
+return {
+	th = {
+		-- tabs
+		tuning_tab_cars = "รถ",
+		tuning_tab_paint = "สี",
+		tuning_tab_wheels = "ล้อ",
+		tuning_tab_body = "ตัวถัง",
+		tuning_tab_lights = "ไฟ",
+		tuning_tab_effects = "เอฟเฟกต์",
+		tuning_tab_performance = "สมรรถนะ",
+
+		-- general
+		tuning_title = "อู่แต่งรถ",
+		tuning_buy = "ซื้อ %s",
+		tuning_get = "รับรถฟรี",
+		tuning_install = "ติดตั้ง (มีแล้ว)",
+		tuning_equipped = "ติดตั้งอยู่",
+		tuning_select = "เลือกคันนี้",
+		tuning_selected = "กำลังใช้งาน",
+		tuning_owned = "มีแล้ว",
+		tuning_drive = "ขับเลย!",
+		tuning_upgrade = "อัปเกรด %s",
+		tuning_max = "สูงสุดแล้ว",
+		tuning_close = "ปิด",
+		tuning_preview_fx = "แสดงตัวอย่างเอฟเฟกต์",
+		tuning_hint = "ลากเพื่อหมุน  |  เลื่อนล้อเมาส์หรือบีบนิ้วเพื่อซูม",
+		tuning_no_car = "ซื้อรถคันแรกของคุณเพื่อเริ่มแต่งรถ",
+
+		-- section headers
+		tuning_cat_paint = "สีตัวรถ",
+		tuning_cat_material = "ผิวสี",
+		tuning_cat_wheel = "ล้อ",
+		tuning_cat_rim = "สีกระทะล้อ",
+		tuning_cat_caliper = "สีคาลิปเปอร์",
+		tuning_cat_spoiler = "สปอยเลอร์",
+		tuning_cat_kit = "ชุดแต่งรอบคัน",
+		tuning_cat_hood = "ฝากระโปรง",
+		tuning_cat_decal = "สติกเกอร์",
+		tuning_cat_headlight = "สีไฟหน้า",
+		tuning_cat_neon = "ไฟนีออนใต้ท้องรถ",
+		tuning_cat_tint = "ฟิล์มกรองแสง",
+		tuning_cat_flames = "เปลวไฟท่อไอเสีย",
+		tuning_cat_smoke = "ควันยาง",
+		tuning_cat_performance = "อัปเกรดสมรรถนะ",
+
+		-- stats
+		tuning_stat_speed = "ความเร็ว",
+		tuning_stat_accel = "อัตราเร่ง",
+		tuning_stat_handling = "การควบคุม",
+		tuning_stat_braking = "เบรก",
+		tuning_stat_grip = "การยึดเกาะ",
+
+		-- options: material
+		tuning_opt_material_Gloss = "เงา",
+		tuning_opt_material_Matte = "ด้าน",
+		tuning_opt_material_Metallic = "เมทัลลิก",
+		tuning_opt_material_Pearl = "มุก",
+		tuning_opt_material_Carbon = "คาร์บอน",
+		tuning_opt_material_Chrome = "โครเมียม",
+		tuning_opt_material_Neon = "นีออน",
+		-- options: wheel
+		tuning_opt_wheel_Classic = "คลาสสิก",
+		tuning_opt_wheel_Sport = "สปอร์ต",
+		tuning_opt_wheel_Turbo = "เทอร์โบ",
+		tuning_opt_wheel_Mesh = "ตาข่าย",
+		tuning_opt_wheel_OffRoad = "ออฟโรด",
+		tuning_opt_wheel_DeepDish = "ดีปดิช",
+		tuning_opt_wheel_Spinner = "สปินเนอร์",
+		tuning_opt_wheel_NeonRim = "ขอบนีออน",
+		-- options: spoiler
+		tuning_opt_spoiler_None = "ไม่มี",
+		tuning_opt_spoiler_Lip = "ลิปสปอยเลอร์",
+		tuning_opt_spoiler_Ducktail = "ดั๊กเทล",
+		tuning_opt_spoiler_Wing = "ปีกหลัง",
+		tuning_opt_spoiler_GTWing = "ปีก GT",
+		-- options: kit
+		tuning_opt_kit_Stock = "ชุดเดิม",
+		tuning_opt_kit_Street = "สตรีท",
+		tuning_opt_kit_Race = "เรซซิ่ง",
+		-- options: hood
+		tuning_opt_hood_Stock = "ฝากระโปรงเดิม",
+		tuning_opt_hood_Scoop = "ช่องรับอากาศ",
+		tuning_opt_hood_Carbon = "คาร์บอน",
+		-- options: tint
+		tuning_opt_tint_Clear = "ใส",
+		tuning_opt_tint_Smoke = "สีควัน",
+		tuning_opt_tint_Black = "ดำสนิท",
+		-- options: flames
+		tuning_opt_flames_Off = "ปิด",
+		tuning_opt_flames_Orange = "ไฟสีส้ม",
+		tuning_opt_flames_Blue = "ไฟสีฟ้า",
+		-- options: decal
+		tuning_opt_decal_None = "ไม่มี",
+		tuning_opt_decal_Number = "เลขแข่ง",
+		tuning_opt_decal_Stripes = "ลายทาง",
+		tuning_opt_decal_Checker = "ลายหมากรุก",
+		tuning_opt_decal_Flames = "ลายเปลวไฟ",
+		-- options: color categories (None only)
+		tuning_opt_neon_None = "ไม่มี",
+		tuning_opt_smoke_None = "ไม่มี",
+	},
+	en = {
+		-- tabs
+		tuning_tab_cars = "Cars",
+		tuning_tab_paint = "Paint",
+		tuning_tab_wheels = "Wheels",
+		tuning_tab_body = "Body",
+		tuning_tab_lights = "Lights",
+		tuning_tab_effects = "Effects",
+		tuning_tab_performance = "Tuning",
+
+		-- general
+		tuning_title = "TUNING GARAGE",
+		tuning_buy = "Buy %s",
+		tuning_get = "Get for free",
+		tuning_install = "Install (owned)",
+		tuning_equipped = "Equipped",
+		tuning_select = "Select",
+		tuning_selected = "Selected",
+		tuning_owned = "Owned",
+		tuning_drive = "DRIVE",
+		tuning_upgrade = "Upgrade %s",
+		tuning_max = "MAX",
+		tuning_close = "Close",
+		tuning_preview_fx = "Preview effects",
+		tuning_hint = "Drag to rotate  |  Scroll or pinch to zoom",
+		tuning_no_car = "Buy your first car to start tuning",
+
+		-- section headers
+		tuning_cat_paint = "Body color",
+		tuning_cat_material = "Paint finish",
+		tuning_cat_wheel = "Wheels",
+		tuning_cat_rim = "Rim color",
+		tuning_cat_caliper = "Brake caliper",
+		tuning_cat_spoiler = "Spoiler",
+		tuning_cat_kit = "Body kit",
+		tuning_cat_hood = "Hood",
+		tuning_cat_decal = "Decal",
+		tuning_cat_headlight = "Headlights",
+		tuning_cat_neon = "Underglow",
+		tuning_cat_tint = "Window tint",
+		tuning_cat_flames = "Exhaust flames",
+		tuning_cat_smoke = "Tire smoke",
+		tuning_cat_performance = "Performance upgrades",
+
+		-- stats
+		tuning_stat_speed = "Speed",
+		tuning_stat_accel = "Accel",
+		tuning_stat_handling = "Handling",
+		tuning_stat_braking = "Braking",
+		tuning_stat_grip = "Grip",
+
+		-- options: material
+		tuning_opt_material_Gloss = "Gloss",
+		tuning_opt_material_Matte = "Matte",
+		tuning_opt_material_Metallic = "Metallic",
+		tuning_opt_material_Pearl = "Pearl",
+		tuning_opt_material_Carbon = "Carbon",
+		tuning_opt_material_Chrome = "Chrome",
+		tuning_opt_material_Neon = "Neon",
+		-- options: wheel
+		tuning_opt_wheel_Classic = "Classic",
+		tuning_opt_wheel_Sport = "Sport",
+		tuning_opt_wheel_Turbo = "Turbo",
+		tuning_opt_wheel_Mesh = "Mesh",
+		tuning_opt_wheel_OffRoad = "Off-road",
+		tuning_opt_wheel_DeepDish = "Deep dish",
+		tuning_opt_wheel_Spinner = "Spinner",
+		tuning_opt_wheel_NeonRim = "Neon rim",
+		-- options: spoiler
+		tuning_opt_spoiler_None = "None",
+		tuning_opt_spoiler_Lip = "Lip",
+		tuning_opt_spoiler_Ducktail = "Ducktail",
+		tuning_opt_spoiler_Wing = "Wing",
+		tuning_opt_spoiler_GTWing = "GT wing",
+		-- options: kit
+		tuning_opt_kit_Stock = "Stock",
+		tuning_opt_kit_Street = "Street",
+		tuning_opt_kit_Race = "Race",
+		-- options: hood
+		tuning_opt_hood_Stock = "Stock hood",
+		tuning_opt_hood_Scoop = "Scoop",
+		tuning_opt_hood_Carbon = "Carbon",
+		-- options: tint
+		tuning_opt_tint_Clear = "Clear",
+		tuning_opt_tint_Smoke = "Smoke",
+		tuning_opt_tint_Black = "Blackout",
+		-- options: flames
+		tuning_opt_flames_Off = "Off",
+		tuning_opt_flames_Orange = "Orange fire",
+		tuning_opt_flames_Blue = "Blue fire",
+		-- options: decal
+		tuning_opt_decal_None = "None",
+		tuning_opt_decal_Number = "Race number",
+		tuning_opt_decal_Stripes = "Stripes",
+		tuning_opt_decal_Checker = "Checkered",
+		tuning_opt_decal_Flames = "Flames",
+		-- options: color categories (None only)
+		tuning_opt_neon_None = "None",
+		tuning_opt_smoke_None = "None",
+	},
+}

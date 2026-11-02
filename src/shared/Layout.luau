@@ -7,6 +7,13 @@ local Layout = {}
 
 Layout.GROUND_Y = 0
 Layout.PLOT_COUNT = 4
+-- Each plot's own accent color (Classic theme).
+Layout.PLOT_ACCENTS = {
+	Color3.fromRGB(255, 140, 30),
+	Color3.fromRGB(30, 200, 255),
+	Color3.fromRGB(120, 230, 60),
+	Color3.fromRGB(230, 60, 200),
+}
 
 Layout.RING_CENTER = Vector3.new(0, 0, 0)
 Layout.RING_INNER_RADIUS = 80
@@ -78,6 +85,67 @@ Layout.HIRE_BOARD = faceOut(55, 58)
 Layout.PARKING_BUTTON = Vector3.new(48, 0, -52)
 Layout.PLAYER_SPAWN = faceOut(0, 20)
 Layout.GATE = faceOut(0, -60)
+
+-- Station model anchors (ground level, plot-aligned; see docs/CONTRACT.md §12).
+-- tire/oil sit beside their bay; lift, paint and dyno are built around the parked car of their bay.
+Layout.STATIONS = {
+	tire = Vector3.new(-38, 0, -2),
+	oil = Vector3.new(-6, 0, -2),
+	lift = Vector3.new(16, 0, -2),
+	paint = Vector3.new(48, 0, -2),
+	dyno = Vector3.new(16, 0, -2),
+	engine = Vector3.new(16, 0, 10),
+	diagnostics = Vector3.new(-30, 0, 12),
+	wash = Vector3.new(6, 0, -42),
+}
+
+Layout.RECEPTION = { desk = faceOut(-20, -44), employee = faceOut(-20, -40.5), button = Vector3.new(-20, 0, -50) }
+Layout.WASH_BUTTON = Vector3.new(20, 0, -40)
+Layout.DIAGNOSTICS_BUTTON = Vector3.new(-32, 0, 3)
+Layout.ENGINE_BUTTON = Vector3.new(16, 0, 16)
+Layout.DYNO_BUTTON = Vector3.new(30, 0, 12)
+
+-- Stocker walks back and forth in front of the shelves.
+Layout.STOCK = { employee = faceOut(-44, 40), routeA = Vector3.new(-62, 0, 40), routeB = Vector3.new(-26, 0, 40) }
+
+-- Mezzanine office (second floor) over the back-right of the building.
+Layout.MEZZANINE = { minX = 24, maxX = 68, minZ = 30, maxZ = 58, floorY = 12, stairsX = 65, stairsZ0 = 4, stairsZ1 = 28 }
+Layout.OFFICE = {
+	desk = CFrame.new(46, 12, 44),
+	employee = CFrame.new(46, 12, 49),
+	button = Vector3.new(61, 0, -8),
+}
+
+-- Tuning annex behind the back wall (personal cars). Doorway in the back wall at X -8..8.
+Layout.ANNEX = { minX = -30, maxX = 30, minZ = 60, maxZ = 104, height = 16, doorHalfWidth = 8 }
+Layout.TUNING = {
+	turntable = faceOut(0, 84),
+	turntableRadius = 9,
+	terminal = Vector3.new(16, 0, 70),
+	cameraFocus = Vector3.new(0, 3, 84),
+	button = Vector3.new(0, 0, 52),
+}
+Layout.DRIVE_SPAWN = faceOut(6, -78) -- on the connector road, nose toward the ring
+
+-- Walk-in shoppers: gate sidewalk -> center aisle -> in front of a shelf (shelf X filled in at runtime).
+Layout.SHOPPER_PATH = {
+	Vector3.new(-11, 0, -58),
+	Vector3.new(-11, 0, -30),
+	Vector3.new(2, 0, -30),
+	Vector3.new(2, 0, 32),
+}
+Layout.SHOPPER_SHELF_Z = 41
+
+-- Where a station model's pivot goes, in world space. Station models are built plot-aligned.
+function Layout.stationCFrame(plotIndex: number, stationId: string): CFrame
+	local p = Layout.STATIONS[stationId]
+	assert(p, "Unknown station " .. tostring(stationId))
+	return Layout.toWorld(plotIndex, CFrame.new(p))
+end
+
+function Layout.shelfCFrame(plotIndex: number, shelfIndex: number): CFrame
+	return Layout.toWorld(plotIndex, CFrame.new(Layout.SHELVES[shelfIndex].shelf.Position))
+end
 
 -- Plot i sits at angle (i-1)*90deg around the ring. Its -Z (LookVector) faces the ring center.
 function Layout.plotAngle(plotIndex: number): number

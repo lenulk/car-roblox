@@ -1,6 +1,7 @@
 --!strict
--- Where earned money goes: into the plot's safe (walk over the pad to collect) or, with a
--- cashier hired, straight into the wallet. Also owns star points / star level.
+-- Where earned money goes: into the plot's safe (walk over the pad to collect) or, with a cashier
+-- or the AutoCollect pass, straight into the wallet. Applies the income multiplier
+-- (rebirths × DoubleMoney pass × cashier bonus). Owns star points and the player-list leaderstats.
 
 local Players = game:GetService("Players")
 
@@ -13,16 +14,17 @@ local Game = require(Shared.Config.Game)
 local PlayerData = require(script.Parent.PlayerData)
 local PlotService = require(script.Parent.PlotService)
 local MapBuilder = require(script.Parent.MapBuilder)
+local GamePassService = require(script.Parent.GamePassService)
 
 local EconomyService = {}
 
-local hasCashier: (Player) -> boolean = function()
-	return false
+-- HireService registers the cashier's level here (0 = no cashier); avoids a require cycle.
+local cashierLevel: (Player) -> number = function()
+	return 0
 end
 
--- HireService registers itself here (avoids a require cycle).
-function EconomyService.setCashierCheck(fn: (Player) -> boolean)
-	hasCashier = fn
+function EconomyService.setCashierLevel(fn: (Player) -> number)
+	cashierLevel = fn
 end
 
 function EconomyService.starLevel(points: number): number
@@ -33,6 +35,17 @@ function EconomyService.starLevel(points: number): number
 		end
 	end
 	return level
+end
+
+-- Rebirth bonus × DoubleMoney pass. Shown in the HUD.
+function EconomyService.multiplier(player: Player): number
+	local data = PlayerData.get(player)
+	local rebirths = if data then data.rebirths else 0
+	local m = 1 + rebirths * Game.REBIRTH_BONUS
+	if GamePassService.owns(player, "DoubleMoney") then
+		m *= GamePassService.value("DoubleMoney")
+	end
+	return m
 end
 
 local function safeLabel(plotIndex: number): TextLabel?
@@ -54,26 +67,36 @@ local function safePosition(plotIndex: number): Vector3
 	return Layout.toWorld(plotIndex, Layout.SAFE).Position + Vector3.new(0, 4, 0)
 end
 
--- Pays the player for finished work. Returns where it went: "wallet" or "safe".
-function EconomyService.earn(player: Player, amount: number): string
-	amount = math.floor(amount)
-	local direct = hasCashier(player)
+local function goesToWallet(player: Player): boolean
+	return cashierLevel(player) > 0 or GamePassService.owns(player, "AutoCollect")
+end
+
+-- Pays the player for finished work; returns the final amount after multipliers.
+function EconomyService.earn(player: Player, baseAmount: number): number
+	local level = cashierLevel(player)
+	local bonus = if level > 0 then (Game.CASHIER_BONUS[level] or 0) else 0
+	local amount = math.floor(baseAmount * EconomyService.multiplier(player) * (1 + bonus) + 0.5)
+	if amount <= 0 then
+		return 0
+	end
+	local direct = goesToWallet(player)
 	PlayerData.update(player, function(data)
 		if direct then
 			data.money += amount
 		else
 			data.safe += amount
 		end
+		data.totalEarned += amount
 	end)
 	local plotIndex = PlotService.getPlotIndex(player)
 	local data = PlayerData.get(player)
 	if plotIndex and data then
 		refreshSafeLabel(plotIndex, data.safe)
 	end
-	return if direct then "wallet" else "safe"
+	return amount
 end
 
-function EconomyService.collectSafe(player: Player)
+function EconomyService.collectSafe(player: Player, quiet: boolean?)
 	local data = PlayerData.get(player)
 	local plotIndex = PlotService.getPlotIndex(player)
 	if not data or not plotIndex or data.safe <= 0 then
@@ -86,24 +109,26 @@ function EconomyService.collectSafe(player: Player)
 	end)
 	refreshSafeLabel(plotIndex, 0)
 	Remotes.get("Effect"):FireClient(player, "Cash", safePosition(plotIndex), "+" .. Format.money(amount))
-	Remotes.get("Notify"):FireClient(player, "notify_collected", { Format.money(amount) })
+	if not quiet then
+		Remotes.get("Notify"):FireClient(player, "notify_collected", { Format.money(amount) })
+	end
 end
 
-function EconomyService.addStarPoint(player: Player)
+function EconomyService.addStarPoint(player: Player, points: number?)
 	local data = PlayerData.get(player)
 	if not data then
 		return
 	end
 	local before = EconomyService.starLevel(data.starPoints)
 	PlayerData.update(player, function(d)
-		d.starPoints += 1
+		d.starPoints += points or 1
 	end)
 	local after = EconomyService.starLevel(data.starPoints)
 	if after > before then
 		Remotes.get("Notify"):FireClient(player, "notify_star_up", { after })
 		local plotIndex = PlotService.getPlotIndex(player)
 		if plotIndex then
-			Remotes.get("Effect"):FireClient(player, "Unlock", Layout.toWorld(plotIndex, Layout.GATE).Position + Vector3.new(0, 16, 0))
+			Remotes.get("Effect"):FireClient(player, "Level", Layout.toWorld(plotIndex, Layout.GATE).Position + Vector3.new(0, 16, 0))
 		end
 	end
 end
@@ -134,6 +159,25 @@ local function connectPad(plotIndex: number)
 	end)
 end
 
+local function leaderstats(player: Player): (IntValue?, IntValue?)
+	local folder = player:FindFirstChild("leaderstats")
+	if not folder then
+		local f = Instance.new("Folder")
+		f.Name = "leaderstats"
+		local money = Instance.new("IntValue")
+		money.Name = "Money"
+		money.Parent = f
+		local stars = Instance.new("IntValue")
+		stars.Name = "Stars"
+		stars.Parent = f
+		f.Parent = player
+		folder = f
+	end
+	local money = (folder :: Instance):FindFirstChild("Money")
+	local stars = (folder :: Instance):FindFirstChild("Stars")
+	return (if money and money:IsA("IntValue") then money else nil), (if stars and stars:IsA("IntValue") then stars else nil)
+end
+
 function EconomyService.start()
 	for plotIndex = 1, Layout.PLOT_COUNT do
 		connectPad(plotIndex)
@@ -149,20 +193,28 @@ function EconomyService.start()
 		lastTouch[player] = nil
 	end)
 
-	PlayerData.addSnapshotField(function(_player, data, snapshot)
+	PlayerData.addSnapshotField(function(player, data, snapshot)
 		local level = EconomyService.starLevel(data.starPoints)
 		snapshot.starLevel = level
 		snapshot.nextStarAt = Game.STAR_THRESHOLDS[level + 1]
+		snapshot.multiplier = EconomyService.multiplier(player)
+		local money, stars = leaderstats(player)
+		if money then
+			money.Value = math.clamp(math.floor(data.money), 0, 2 ^ 31 - 1)
+		end
+		if stars then
+			stars.Value = level
+		end
 	end)
 
-	-- A hired cashier empties the safe into the wallet on a timer.
+	-- Cashier / AutoCollect empty whatever is still in the safe (e.g. from before hiring).
 	task.spawn(function()
 		while true do
 			task.wait(Game.CASHIER_COLLECT_INTERVAL)
 			for _, player in Players:GetPlayers() do
 				local data = PlayerData.get(player)
-				if data and data.safe > 0 and hasCashier(player) then
-					EconomyService.collectSafe(player)
+				if data and data.safe > 0 and goesToWallet(player) then
+					EconomyService.collectSafe(player, true)
 				end
 			end
 		end
