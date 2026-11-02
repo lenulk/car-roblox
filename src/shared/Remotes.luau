@@ -6,7 +6,7 @@
 --   DataChanged  (snapshot: Snapshot)                 full player snapshot, see docs/CONTRACT.md
 --   Notify       (key: string, args: {any}?)           toast message; key is a Config/Strings key
 --   OpenUI       (uiName: "Hire")                      ask the client to open a window
---   Effect       (effect: string, position: Vector3)   "Unlock" | "Cash" | "Repair" one-shot visuals/sounds
+--   Effect       (effect: string, position: Vector3, text: string?)   "Unlock" | "Cash" | "Repair" one-shot visuals
 -- Client -> Server
 --   HireEmployee (role: string) -> (ok: boolean, messageKey: string)
 --   SetSetting   (key: "lang" | "music", value: any)
