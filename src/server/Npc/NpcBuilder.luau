@@ -1053,7 +1053,8 @@ function NpcBuilder.place(model: Model, floorPos: Vector3, look: Vector3?)
 			yaw = math.atan2(-flat.X, -flat.Z)
 		end
 	end
-	root.CFrame = CF(floorPos + V3(0, NpcBuilder.rootHeight(model), 0)) * CFrame.Angles(0, yaw, 0)
+	-- PivotTo moves every part explicitly, so this also works before the model is parented.
+	model:PivotTo(CF(floorPos + V3(0, NpcBuilder.rootHeight(model), 0)) * CFrame.Angles(0, yaw, 0))
 end
 
 --[[

@@ -90,7 +90,6 @@ return function(level: number, accent: Color3, opts: { [string]: any }?): Model
 	local ledColor = tier.ledColor(accent)
 	local metalProps: ModelKit.Props = { Material = tier.metalMaterial, Reflectance = tier.metalReflectance }
 	local trimProps: ModelKit.Props = { Material = tier.trimMaterial }
-	local bodyProps: ModelKit.Props = { Material = tier.bodyMaterial, Reflectance = tier.bodyReflectance }
 	local hoseColor = if lv == 1 then Color3.fromRGB(48, 44, 40) else Color3.fromRGB(28, 28, 30)
 
 	local function rust(cf: CFrame, w: number, h: number)
@@ -319,7 +318,7 @@ return function(level: number, accent: Color3, opts: { [string]: any }?): Model
 		end
 	end
 	if lv == 1 then
-		rust(CFrame.new(4.3, 1.0, -3.22) * CFrame.Angles(0, 0, 0), 0.5, 0.4)
+		rust(CFrame.new(3.75, 1.0, -3.22), 0.1, 0.5)
 	end
 
 	------------------------------------------------------------ drip tray with grate
