@@ -26,5 +26,7 @@ Remotes.get("DataChanged").OnClientEvent:Connect(function(snapshot)
 	ClientState.snapshot = snapshot
 	changed:Fire(snapshot)
 end)
+-- The server's first push can race this listener; ask once we are surely listening.
+Remotes.get("RequestSnapshot"):FireServer()
 
 return ClientState

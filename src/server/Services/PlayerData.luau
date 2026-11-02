@@ -254,6 +254,7 @@ end
 
 function PlayerData.start()
 	Remotes.get("SetSetting").OnServerEvent:Connect(onSetSetting)
+	Remotes.get("RequestSnapshot").OnServerEvent:Connect(PlayerData.push)
 
 	Players.PlayerRemoving:Connect(function(player)
 		local profile = profiles[player]

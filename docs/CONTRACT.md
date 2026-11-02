@@ -76,7 +76,8 @@ and parents them back to `PlotN.Unlockables` when bought. Builders must therefor
 
 Server → client: `DataChanged(snapshot)`, `Notify(key, args?)`, `OpenUI("Hire")`, `Effect(effect, position, text?)`
 with effect ∈ `"Unlock" | "Cash" | "Repair"`.
-Client → server: `HireEmployee:InvokeServer(role) -> (ok, messageKey)`, `SetSetting:FireServer(key, value)` with key ∈ `"lang"` (`"th"`/`"en"`), `"music"` (boolean).
+Client → server: `HireEmployee:InvokeServer(role) -> (ok, messageKey)`, `SetSetting:FireServer(key, value)` with key ∈ `"lang"` (`"th"`/`"en"`), `"music"` (boolean),
+`RequestSnapshot:FireServer()` (ClientState sends it once at startup so the first snapshot is never missed).
 
 ### Snapshot (sent on every change)
 ```lua

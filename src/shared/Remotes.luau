@@ -10,6 +10,7 @@
 -- Client -> Server
 --   HireEmployee (role: string) -> (ok: boolean, messageKey: string)
 --   SetSetting   (key: "lang" | "music", value: any)
+--   RequestSnapshot ()                                 client asks for a fresh DataChanged once it is listening
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -23,6 +24,7 @@ local DEFINITIONS: { [string]: string } = {
 	Effect = "RemoteEvent",
 	HireEmployee = "RemoteFunction",
 	SetSetting = "RemoteEvent",
+	RequestSnapshot = "RemoteEvent",
 }
 
 local Remotes = {}
