@@ -13,9 +13,9 @@
 
 ## 2. ไฟล์ตั้งค่าและข้อความ
 - ✅ Config v2: Unlocks (17 ขั้น), Problems (8 อาการ), Stations, Shelves, Employees (6 ตำแหน่ง), CarTypes (6 รุ่น), PersonalCars, Customization (14 หมวด), Themes (4 ธีม), GamePasses, Game
-- 🟡 `Strings.luau` ข้อความหลักไทย/อังกฤษ 133 คีย์ (ระบบรวมไฟล์ StringsUI / StringsTuning)
-- 🟡 `StringsTuning.luau` ข้อความห้องแต่งรถ
-- 🔄 `StringsUI.luau` ข้อความ UI อื่นๆ
+- ✅ `Strings.luau` ข้อความหลักไทย/อังกฤษ 133 คีย์ (ระบบรวมไฟล์ StringsUI / StringsTuning)
+- ✅ `StringsTuning.luau` ข้อความห้องแต่งรถ
+- ✅ `StringsUI.luau` ข้อความ UI อื่นๆ
 
 ## 3. ระบบฝั่ง server (Opus)
 - ✅ PlayerData v2 (ข้อมูลใหม่ทั้งหมด, เซฟเก่าใช้ต่อได้)
@@ -38,12 +38,12 @@
 - 🔄 NPC: ตัวละครพนักงาน 6 ตำแหน่ง (ชุด/อุปกรณ์ตามตำแหน่ง), ท่าเดิน/ท่าทำงานแบบไม่ใช้ไฟล์ animation, ลูกค้าเดินซื้อของ
 
 ## 5. ระบบขับรถ
-- 🟡 VehicleBuilder + VehicleController (ช่วงล่างสปริง, เลี้ยว, กันพลิก, ไฟพ่นท่อ, ควันยาง)
-- 🟡 DriveHUD (มาตรวัดความเร็ว + ปุ่มกลับ)
+- ✅ VehicleBuilder + VehicleController (ช่วงล่างสปริง, เลี้ยว, กันพลิก, ไฟพ่นท่อ, ควันยาง)
+- ✅ DriveHUD (มาตรวัดความเร็ว + ปุ่มกลับ)
 
 ## 6. UI ฝั่งผู้เล่น
-- 🟡 Tuning (ห้องแต่งรถ + พรีวิว 3D หมุนได้ + ซื้อรถ + อัปเกรดสมรรถนะ + ปุ่ม DRIVE)
-- 🔄 Upgrade, HireMenu (แท็บจ้าง/อัปเกรดพนักงาน), Daily, Offline, Rebirth, Themes, Shop, HUD v2, Music, Effects v2, ป้าย VIP
+- ✅ Tuning (ห้องแต่งรถ + พรีวิว 3D หมุนได้ + ซื้อรถ + อัปเกรดสมรรถนะ + ปุ่ม DRIVE)
+- ✅ Upgrade, HireMenu (แท็บจ้าง/อัปเกรดพนักงาน), Daily, Offline, Rebirth, Themes, Shop, HUD v2, Music, Effects v2, ป้าย VIP
 
 ## 7. งานที่ Opus ต้องทำหลัง subagent เสร็จ
 - ⬜ ตรวจโค้ดทุกไฟล์ที่ยัง 🟡/🔄 (ชื่อ, attribute, ฟิลด์ snapshot, require)
