@@ -12,7 +12,11 @@ local Layout: any = require(Shared:WaitForChild("Layout") :: ModuleScript)
 local ConfigFolder = Shared:WaitForChild("Config")
 local Employees: any = require(ConfigFolder:WaitForChild("Employees") :: ModuleScript)
 
-local NpcBuilder = require(script.Parent.Parent:WaitForChild("Npc"):WaitForChild("NpcBuilder") :: ModuleScript)
+local NpcBuilder: any = require(script.Parent.Parent:WaitForChild("Npc"):WaitForChild("NpcBuilder") :: ModuleScript)
+
+type Controller = { play: () -> (), stop: () -> () }
+type IdleController = { play: () -> (), stop: () -> (), wave: (number?) -> () }
+type WalkController = { play: () -> (), stop: () -> (), setSpeed: (number) -> () }
 
 local SKIN_TONES = {
 	Color3.fromRGB(255, 219, 172),
@@ -74,9 +78,9 @@ type State = {
 	baseCF: CFrame,
 	working: boolean,
 	alive: boolean,
-	idle: NpcBuilder.IdleController,
-	walk: NpcBuilder.WalkController,
-	work: NpcBuilder.Controller,
+	idle: IdleController,
+	walk: WalkController,
+	work: Controller,
 	emitter: ParticleEmitter?,
 	yawTween: Tween?,
 	thread: thread?,
