@@ -55,7 +55,10 @@ return {
 	RUBBER_BEHIND_PACE = 0.97,
 	RUBBER_CATCHUP_PACE = 1.1,
 	BLOWN_RIVAL_BOOST = 1.2, -- rivals charge past the burning car
-	AVOID_RATE = 22, -- sideways studs/s of a rival dodging a car
+	AVOID_RATE = 22, -- max sideways studs/s of a rival dodging a car
+	AVOID_GAIN = 2.2, -- sideways speed per stud of distance to the target lane (eases into the lane)
+	AVOID_RESPONSE = 40, -- how fast a rival's sideways speed can change (studs/s^2)
+	DODGE_HOLD = 0.8, -- seconds a rival keeps its passing line after the car ahead is clear
 
 	-- timeline ---------------------------------------------------------------------------------
 	INTRO_SECONDS = 7.5,

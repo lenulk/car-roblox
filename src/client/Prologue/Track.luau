@@ -207,10 +207,11 @@ end
 -- Largest |curvature| from s up to s + distance.
 function Track.maxCurvatureAhead(s: number, distance: number): number
 	local best = 0
-	local steps = math.max(1, math.ceil(distance / (stepLength * 2)))
+	-- every point (not every other one): skipping points made the result jump as s crossed a point
+	local steps = math.max(1, math.ceil(distance / stepLength))
 	local base = indexAt(s)
 	for k = 0, steps do
-		local c = curvatureAbs[wrap(base + k * 2)]
+		local c = curvatureAbs[wrap(base + k)]
 		if c > best then
 			best = c
 		end

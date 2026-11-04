@@ -34,6 +34,8 @@ type Car = {
 	base: number, -- rival cruise speed
 	lane: number, -- rival preferred d
 	bumpCooldown: number,
+	dodgeD: number?, -- rival: sideways target while passing a car (kept for a moment so it cannot flicker)
+	dodgeTimer: number,
 	wheels: { Model },
 	wheelRadius: number,
 	wheelAngle: number,
@@ -91,6 +93,8 @@ local function makeCar(parent: Instance, carType: string, color: Color3, isPlaye
 		base = 70,
 		lane = 0,
 		bumpCooldown = 0,
+		dodgeD = nil,
+		dodgeTimer = 0,
 		wheels = wheels,
 		wheelRadius = if type(diameter) == "number" and diameter > 0.5 then diameter / 2 else 1.6,
 		wheelAngle = 0,
@@ -442,6 +446,8 @@ function RaceCars.new(arenaFolder: Instance): any
 				end
 				local targetSpeed = math.min(pace, cornerSpeed)
 				local desiredD = r.lane
+				local dodgeFound: number? = nil
+				local nearestDs = math.huge
 
 				for _, other in all do
 					-- no dodging while standing on the grid
@@ -450,13 +456,21 @@ function RaceCars.new(arenaFolder: Instance): any
 						local dd = other.d - r.d
 						local needed = (r.width + other.width) / 2
 						if ds > 0 and ds < r.length + 30 and math.abs(dd) < needed + 1.5 then
+							-- keep passing on the side already chosen, otherwise go to the side the rival is already on
 							local dir = if r.d >= other.d then 1 else -1
+							local held = r.dodgeD
+							if held then
+								dir = if held >= other.d then 1 else -1
+							end
 							local candidate = other.d + dir * (needed + 2)
 							local limit = half - r.width / 2 - 1
 							if math.abs(candidate) > limit then
 								candidate = other.d - dir * (needed + 2)
 							end
-							desiredD = candidate
+							if ds < nearestDs then
+								nearestDs = ds
+								dodgeFound = candidate
+							end
 							if ds < r.length + 6 and math.abs(dd) < needed * 0.9 then
 								targetSpeed = math.min(targetSpeed, other.speed * 0.98)
 							end
@@ -464,13 +478,33 @@ function RaceCars.new(arenaFolder: Instance): any
 					end
 				end
 
+				-- Hold a dodge for a moment after the car ahead is clear, so the target does not flip every frame.
+				if dodgeFound then
+					r.dodgeD = dodgeFound
+					r.dodgeTimer = Config.DODGE_HOLD
+				else
+					r.dodgeTimer -= dt
+					if r.dodgeTimer <= 0 then
+						r.dodgeD = nil
+					end
+				end
+				local held = r.dodgeD
+				if held then
+					desiredD = held
+				end
+
 				local rate = if targetSpeed > r.speed then Config.RIVAL_ACCEL else Config.RIVAL_DECEL
 				r.speed = approach(r.speed, targetSpeed, rate * dt)
-				local previousD = r.d
+				-- Sideways motion is a smoothed velocity (eases in and out) instead of a clamped jump per frame:
+				-- the body yaw follows r.lat, so a jumpy r.lat made the rivals shake.
 				local limitD = half - r.width / 2 - 0.5
-				local nextD = r.d + math.clamp(desiredD - r.d, -Config.AVOID_RATE * dt, Config.AVOID_RATE * dt)
-				r.d = math.clamp(nextD, -limitD, limitD)
-				r.lat = if dt > 0 then (r.d - previousD) / dt else 0
+				local wantLat = math.clamp((desiredD - r.d) * Config.AVOID_GAIN, -Config.AVOID_RATE, Config.AVOID_RATE)
+				r.lat = approach(r.lat, wantLat, Config.AVOID_RESPONSE * dt)
+				r.d += r.lat * dt
+				if math.abs(r.d) > limitD then
+					r.d = math.sign(r.d) * limitD
+					r.lat = 0
+				end
 				r.s += r.speed * dt
 				r.bumpCooldown = math.max(0, r.bumpCooldown - dt)
 			end
