@@ -4,6 +4,7 @@
 -- orbit camera), tabs (Cars, Paint, Wheels, Body, Lights, Effects, Performance) and a big DRIVE button.
 -- The server answers every purchase with a Notify toast, so no toast is shown here.
 
+local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -115,6 +116,7 @@ function Tuning.start()
 	local contentWidth = 380
 	local layoutKey = ""
 	local lastTabsSig = ""
+	local lastContentSig: string? = nil
 	local popId: string? = nil
 
 	local plotIndex = 1
@@ -189,6 +191,18 @@ function Tuning.start()
 		return out
 	end
 
+	-- everything in the snapshot that the panel content depends on (nil = could not encode -> always render)
+	local function contentSignature(): string?
+		local s = snap()
+		if not s then
+			return nil
+		end
+		local ok, encoded = pcall(function()
+			return HttpService:JSONEncode({ s.cars or {}, s.ownedParts or {}, s.selectedCar or "" })
+		end)
+		return if ok then encoded else nil
+	end
+
 	local function resetPreviewCustom()
 		previewCustom = serverCustom(previewCarId)
 	end
@@ -229,17 +243,18 @@ function Tuning.start()
 		if not isOpen then
 			return
 		end
-		local old = previewModel
-		previewModel = nil
-		if old then
-			old:Destroy()
-		end
+		-- build first: if it fails, keep the previous car on the turntable instead of leaving it empty
 		local ok, result = pcall(function()
 			return CarBuilder.buildCustom(previewCarId, copyTable(previewCustom))
 		end)
 		if not ok or typeof(result) ~= "Instance" then
 			warn("[Tuning] buildCustom failed: " .. tostring(result))
 			return
+		end
+		local old = previewModel
+		previewModel = nil
+		if old then
+			old:Destroy()
 		end
 		local model = result :: Model
 		model.Name = "TuningPreviewCar"
@@ -536,7 +551,8 @@ function Tuning.start()
 		local s = snap()
 		moneyLabel.Text = Format.money(if s and type(s.money) == "number" then s.money else 0)
 		Localizer.bind(carName, "car_" .. previewCarId)
-		local enabled = hasAnyCar() and not busy
+		-- DRIVE drives the car on the turntable, so it is off while previewing a car the player doesn't own
+		local enabled = hasAnyCar() and hasCar(previewCarId) and not busy
 		driveBtn.AutoButtonColor = enabled
 		driveBtn.TextColor3 = if enabled then C.text else C.textDim
 		driveGlow.Visible = enabled
@@ -1028,10 +1044,10 @@ function Tuning.start()
 			if not enabled or busy then
 				return
 			end
-			if owned then
-				callServer("SelectCar", id)
-			else
-				callServer("BuyCar", id)
+			-- The preview car is the one DRIVE launches, so it follows a successful buy / select.
+			local done = if owned then callServer("SelectCar", id) else callServer("BuyCar", id)
+			if done and isOpen then
+				setPreviewCar(id)
 			end
 		end)
 
@@ -1236,6 +1252,7 @@ function Tuning.start()
 	end
 
 	render = function(resetScroll: boolean?)
+		lastContentSig = contentSignature()
 		local saved = scroll.CanvasPosition
 		for _, child in scroll:GetChildren() do
 			if child:IsA("GuiObject") then
@@ -1574,13 +1591,20 @@ function Tuning.start()
 	end)
 
 	driveBtn.Activated:Connect(function()
-		if busy or not isOpen or not hasAnyCar() then
+		if busy or not isOpen or not hasAnyCar() or not hasCar(previewCarId) then
 			return
 		end
-		local s = snap()
-		local carId: any = if hasCar(previewCarId) then previewCarId else s.selectedCar
-		if type(carId) ~= "string" then
-			return
+		local carId = previewCarId
+		-- install previewed parts that are already owned / free, so the player drives what they see
+		-- (parts that still cost money are never bought implicitly)
+		local saved = serverCustom(carId)
+		for category, want in previewCustom do
+			if saved[category] ~= want and isPartOwned(category, want, Customization.price(category, want) or 0) then
+				callServer("Customize", carId, category, want)
+				if not isOpen then
+					return
+				end
+			end
 		end
 		local ok = callServer("DriveCar", carId)
 		if ok and isOpen then
@@ -1707,10 +1731,18 @@ function Tuning.start()
 			resetPreviewCustom()
 			requestRebuild()
 		end
-		if tabsSignature() ~= lastTabsSig then
+		local tabsChanged = tabsSignature() ~= lastTabsSig
+		if tabsChanged then
 			buildTabs()
 		end
-		render()
+		-- the panel only reads cars / ownedParts / selectedCar: money-only snapshots (income ticks every few
+		-- seconds) just refresh the top bar, so cards are not rebuilt under the player's finger
+		local sig = contentSignature()
+		if tabsChanged or sig == nil or sig ~= lastContentSig then
+			render()
+		else
+			updateTopBar()
+		end
 	end)
 end
 

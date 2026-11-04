@@ -10,9 +10,16 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Layout: any = require(Shared:WaitForChild("Layout") :: ModuleScript)
 
+local SoundFx: any = require(Shared:WaitForChild("SoundFx") :: ModuleScript)
+
 local NpcBuilder: any = require(script.Parent.Parent:WaitForChild("Npc"):WaitForChild("NpcBuilder") :: ModuleScript)
 
 local MAX_SHOPPERS_PER_PLOT = 6
+-- Oncoming shoppers (facing each other) both sidestep to their own right when closer than this.
+local AVOID_RANGE = 5
+local AVOID_SIDE = 1.2
+local AVOID_FACING_DOT = -0.3 -- heading dot product below this = walking toward each other
+local AVOID_AHEAD_DOT = 0.2 -- the other one must be in front of us, not behind or beside
 local WALK_SPEED = 7
 local FLOOR_INSIDE = 0.1
 local FLOOR_LOT = 0.06
@@ -23,6 +30,7 @@ local rng = Random.new()
 local live: { [number]: { [Model]: boolean } } = {}
 local pending: { [number]: number } = {}
 local generation: { [number]: number } = {}
+local walking: { [Model]: boolean } = {} -- shoppers currently inside a walkPath call
 
 ----------------------------------------------------------------------------------------------------
 -- Helpers
@@ -58,6 +66,33 @@ end
 
 local function currentGeneration(plotIndex: number): number
 	return generation[plotIndex] or 0
+end
+
+-- Sidestep callback for NpcBuilder.walkPath: +AVOID_SIDE (the walker's right) while another walking
+-- shopper of the same plot is coming toward us within AVOID_RANGE, otherwise 0. Everyone goes right, so
+-- two shoppers passing each other never pick the same side. Plain number math, no allocations.
+local function makeAvoid(registry: { [Model]: boolean }, owner: Model): (Vector3, Vector3) -> number
+	return function(position: Vector3, forward: Vector3): number
+		for other in registry do
+			if other ~= owner and walking[other] then
+				local root = other.PrimaryPart
+				if root then
+					local dx = root.Position.X - position.X
+					local dz = root.Position.Z - position.Z
+					local distance = math.sqrt(dx * dx + dz * dz)
+					if distance < AVOID_RANGE and distance > 1e-3 then
+						local ahead = (dx * forward.X + dz * forward.Z) / distance
+						local look = root.CFrame.LookVector
+						local facing = forward.X * look.X + forward.Z * look.Z
+						if ahead > AVOID_AHEAD_DOT and facing < AVOID_FACING_DOT then
+							return AVOID_SIDE
+						end
+					end
+				end
+			end
+		end
+		return 0
+	end
 end
 
 -- Small "🛍️" pop above the head for about a second.
@@ -120,7 +155,9 @@ local function runVisit(plotIndex: number, shelfIndex: number, onBuy: () -> ())
 	registry[model] = true
 	model.Destroying:Connect(function()
 		registry[model] = nil
+		walking[model] = nil
 	end)
+	local avoid = makeAvoid(registry, model)
 
 	local function alive(): boolean
 		return model.Parent ~= nil and currentGeneration(plotIndex) == visitGeneration
@@ -149,16 +186,34 @@ local function runVisit(plotIndex: number, shelfIndex: number, onBuy: () -> ())
 		local walk = NpcBuilder.walkCycle(model)
 		local idle = NpcBuilder.idle(model)
 		local browse = NpcBuilder.work(model, "reach")
+		local speed = WALK_SPEED * rng:NextNumber(0.85, 1.15)
+		local quirk: any = model:GetAttribute("NpcQuirk")
 
-		if not NpcBuilder.walkPath(model, walk, route, WALK_SPEED, stopped) then
-			return
-		end
-
-		-- Face the shelf (+Z of the plot) and browse.
+		-- Walk in (hands in pockets for that kind of shopper), then face the shelf (+Z of the plot):
+		-- the turn happens only after coming to a full stop.
 		local shelfDirection = Layout.plotCFrame(plotIndex):VectorToWorldSpace(Vector3.new(0, 0, 1))
-		if not NpcBuilder.turnTo(model, shelfDirection, 0.4, stopped) then
+		local shelfPoint = Layout.shelfCFrame(plotIndex, shelfIndex).Position + Vector3.new(0, 4, 0)
+		if quirk == "pocket" then
+			NpcBuilder.setHold(model, "pocket")
+		end
+		walking[model] = true
+		local arrived = NpcBuilder.walkPath(model, walk, route, speed, stopped, shelfDirection, avoid)
+		walking[model] = nil
+		if not arrived then
 			return
 		end
+		-- A quick look at the phone before browsing.
+		if quirk == "phone" then
+			NpcBuilder.setHold(model, "phone")
+			idle.play()
+			task.wait(rng:NextNumber(1, 1.8))
+			idle.stop()
+			if not alive() then
+				return
+			end
+		end
+		NpcBuilder.setHold(model, nil)
+		NpcBuilder.lookAt(model, shelfPoint)
 		browse.play()
 		task.wait(rng:NextNumber(1.5, 2.5))
 		browse.stop()
@@ -174,6 +229,9 @@ local function runVisit(plotIndex: number, shelfIndex: number, onBuy: () -> ())
 		if head and head:IsA("BasePart") then
 			showBagPop(head)
 		end
+		if model.PrimaryPart then
+			SoundFx.play(model.PrimaryPart, "shopperBuy")
+		end
 		idle.play()
 		idle.wave(0.9)
 		task.wait(1)
@@ -181,13 +239,19 @@ local function runVisit(plotIndex: number, shelfIndex: number, onBuy: () -> ())
 			return
 		end
 		idle.stop()
+		NpcBuilder.lookAt(model, nil)
+		if quirk == "pocket" then
+			NpcBuilder.setHold(model, "pocket")
+		end
 
 		-- Back out the way we came (we are standing on the last route point).
 		local back: { Vector3 } = {}
 		for i = #route - 1, 1, -1 do
 			table.insert(back, route[i])
 		end
-		NpcBuilder.walkPath(model, walk, back, WALK_SPEED, stopped)
+		walking[model] = true
+		NpcBuilder.walkPath(model, walk, back, speed, stopped, nil, avoid)
+		walking[model] = nil
 	end)
 	if not ok then
 		warn("[ShopperService] visit failed: " .. tostring(err))

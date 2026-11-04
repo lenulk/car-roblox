@@ -1,7 +1,7 @@
 --!strict
--- Tycoon purchases and station/shelf upgrades. Locked unlockables wait in ServerStorage; only the
--- next unlock's price pad is shown (strict order from Config.Unlocks.list). Upgrading swaps the
--- unlockable's "Station" model for the next level's model.
+-- Tycoon purchases and station/shelf upgrades. Locked unlockables wait in ServerStorage; every
+-- unowned unlock's price pad is shown (nextUnlock is only the guide's suggestion, in
+-- Config.Unlocks.list order). Upgrading swaps the unlockable's "Station" model for the next level's model.
 
 local ServerStorage = game:GetService("ServerStorage")
 
@@ -112,17 +112,23 @@ function UnlockService.stationLevel(player: Player, stationId: string): number
 	return 0
 end
 
+-- First unowned unlock in list order (guide arrow / tutorial). `anytime` unlocks are only suggested
+-- once everything else is owned.
 function UnlockService.nextUnlock(player: Player): any?
 	local data = PlayerData.get(player)
 	if not data then
 		return nil
 	end
+	local fallback: any = nil
 	for _, entry in Unlocks.list do
 		if not data.unlocks[entry.id] then
-			return entry
+			if not (entry :: any).anytime then
+				return entry
+			end
+			fallback = fallback or entry
 		end
 	end
-	return nil
+	return fallback
 end
 
 function UnlockService.allOwned(player: Player): boolean
@@ -196,10 +202,10 @@ function UnlockService.nextButtonPosition(player: Player): Vector3?
 end
 
 local function refreshButtons(plotIndex: number, player: Player?)
-	local nextEntry = if player then UnlockService.nextUnlock(player) else nil
+	local data = if player then PlayerData.get(player) else nil
 	for _, entry in Unlocks.list do
 		if not entry.startOwned then
-			if nextEntry and entry.id == nextEntry.id then
+			if data and not data.unlocks[entry.id] then
 				show(plotIndex, "Buttons", entry.id)
 			else
 				hide(plotIndex, "Buttons", entry.id)
@@ -335,13 +341,19 @@ local function tryUpgrade(player: Player, id: any): (boolean, string)
 		d.money -= cost
 		d.levels[entry.id] = newLevel
 	end)
-	UnlockService.rebuildStation(plotIndex, entry.id, newLevel)
-	Remotes.get("Effect"):FireClient(player, "Level", upgradePosition(plotIndex, entry.id))
-	Remotes.get("Notify"):FireClient(player, "notify_upgraded", { Strings.get(data.settings.lang, "unlock_" .. entry.id), newLevel })
-	for _, fn in upgradedCallbacks do
-		task.spawn(fn, player, entry.id, newLevel)
-	end
+	-- money is already spent: an error below must not leave the player locked out of upgrades
+	local ok, err = pcall(function()
+		UnlockService.rebuildStation(plotIndex, entry.id, newLevel)
+		Remotes.get("Effect"):FireClient(player, "Level", upgradePosition(plotIndex, entry.id))
+		Remotes.get("Notify"):FireClient(player, "notify_upgraded", { Strings.get(data.settings.lang, "unlock_" .. entry.id), newLevel })
+		for _, fn in upgradedCallbacks do
+			task.spawn(fn, player, entry.id, newLevel)
+		end
+	end)
 	upgrading[player] = nil
+	if not ok then
+		warn("[UnlockService] upgrade " .. entry.id .. " failed after charging: " .. tostring(err))
+	end
 	return true, "notify_upgraded"
 end
 
@@ -356,9 +368,8 @@ local function tryPurchase(player: Player, plotIndex: number, id: string)
 		return
 	end
 	local entry = Unlocks.byId[id]
-	local nextEntry = UnlockService.nextUnlock(player)
 	local data = PlayerData.get(player)
-	if not entry or not nextEntry or nextEntry.id ~= id or not data then
+	if not entry or entry.startOwned or not data or data.unlocks[id] then
 		return
 	end
 	if data.money < entry.price then
@@ -366,25 +377,35 @@ local function tryPurchase(player: Player, plotIndex: number, id: string)
 		return
 	end
 	purchasing[player] = true
+	-- The tutorial only advances when the suggested unlock is bought (not e.g. the anytime TuningRoom).
+	local suggested = UnlockService.nextUnlock(player)
+	local wasSuggested = suggested ~= nil and suggested.id == id
 	PlayerData.update(player, function(d)
 		d.money -= entry.price
 		d.unlocks[id] = true
 		if entry.upgradable then
 			d.levels[id] = 1
 		end
-		if d.tutorialStep == 3 then
+		if d.tutorialStep == 3 and wasSuggested then
 			d.tutorialStep = 4
 		end
 	end)
-	show(plotIndex, "Unlockables", id)
-	refreshButtons(plotIndex, player)
-	refreshHideWhenOwned(plotIndex, player)
-	Remotes.get("Effect"):FireClient(player, "Unlock", buttonPosition(plotIndex, entry))
-	Remotes.get("Notify"):FireClient(player, "notify_unlocked", { Strings.get(data.settings.lang, "unlock_" .. id) })
-	for _, fn in unlockedCallbacks do
-		task.spawn(fn, player, id)
-	end
+	-- money is already spent: an error below must not leave the player locked out of purchases
+	local ok, err = pcall(function()
+		UnlockService.rebuildStation(plotIndex, id, 1)
+		show(plotIndex, "Unlockables", id)
+		refreshButtons(plotIndex, player)
+		refreshHideWhenOwned(plotIndex, player)
+		Remotes.get("Effect"):FireClient(player, "Unlock", buttonPosition(plotIndex, entry))
+		Remotes.get("Notify"):FireClient(player, "notify_unlocked", { Strings.get(data.settings.lang, "unlock_" .. id) })
+		for _, fn in unlockedCallbacks do
+			task.spawn(fn, player, id)
+		end
+	end)
 	purchasing[player] = nil
+	if not ok then
+		warn("[UnlockService] purchase " .. id .. " failed after charging: " .. tostring(err))
+	end
 end
 
 local function newPrompt(parent: Instance, actionKey: string, objectKey: string, hold: number): ProximityPrompt

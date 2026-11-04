@@ -300,7 +300,7 @@ return function(level: number, accent: Color3, opts: { [string]: any }?): Model
 	if lv == 1 then
 		for _, rz in { -4.0, 3.0 } do
 			ModelKit.part(model, "Rust", Vector3.new(0.6, 0.04, 1.2), CFrame.new(-3.5, 12.41, rz), Color3.fromRGB(122, 70, 38), {
-				Material = Enum.Material.Rust,
+				Material = Enum.Material.CorrodedMetal,
 				CanCollide = false,
 				CastShadow = false,
 			})

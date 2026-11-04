@@ -116,6 +116,7 @@ local function spawnInterval(player: Player): number
 	end
 	return interval
 end
+CustomerService.spawnInterval = spawnInterval -- used by OfflineService
 
 ----------------------------------------------------------------------------------------------------
 -- Car wash: foam on while a car rolls through, bonus on the bill
@@ -386,7 +387,11 @@ local function startPlot(player: Player, plotIndex: number)
 	task.spawn(function()
 		task.wait(2)
 		while state.alive do
-			spawnCustomer(plotIndex, state)
+			-- one failed spawn must not end the loop (the plot would get no customers until rebirth)
+			local ok, err = pcall(spawnCustomer, plotIndex, state)
+			if not ok then
+				warn("[CustomerService] spawnCustomer failed: " .. tostring(err))
+			end
 			task.wait(spawnInterval(player))
 		end
 	end)

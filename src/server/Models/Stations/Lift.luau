@@ -118,7 +118,7 @@ return function(level: number, accent: Color3, opts: { [string]: any }?): Model
 					Vector3.new(r[3], r[4], 0.05),
 					CFrame.new(sx * 5.5 + r[1] * sx, r[2], -0.77),
 					Color3.fromRGB(122, 70, 38),
-					{ Material = Enum.Material.Rust, CanCollide = false, CastShadow = false }
+					{ Material = Enum.Material.CorrodedMetal, CanCollide = false, CastShadow = false }
 				)
 			end
 			ModelKit.part(

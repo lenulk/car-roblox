@@ -94,7 +94,7 @@ return function(level: number, accent: Color3, opts: { [string]: any }?): Model
 
 	local function rust(cf: CFrame, w: number, h: number)
 		ModelKit.part(model, "Rust", Vector3.new(w, h, 0.05), cf, Color3.fromRGB(122, 70, 38), {
-			Material = Enum.Material.Rust,
+			Material = Enum.Material.CorrodedMetal,
 			CanCollide = false,
 			CastShadow = false,
 		})

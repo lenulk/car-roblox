@@ -197,7 +197,9 @@ local function hood(ctx: any, T: any, P: any)
 		if ctx.id == "Muscle" then
 			zc = zh0 + 0.9
 		else
-			zc = math.clamp(zA - 1.3, zh0 + 0.6, zA - 0.4)
+			-- short hoods (Super): zh0 + 0.6 can exceed zA - 0.4, so centre the vent instead of clamping
+			local lo, hi = zh0 + 0.6, zA - 0.4
+			zc = if lo <= hi then math.clamp(zA - 1.3, lo, hi) else (zh0 + zA) / 2
 		end
 		local F = frameAt(zc, 1.0)
 		T.box("HoodVent", V3(1.6, 0.06, 1.0), F * CF(0, 0.04, 0), DARK)

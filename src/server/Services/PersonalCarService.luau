@@ -216,8 +216,11 @@ local function driveCar(player: Player, data: PlayerData.Data, carId: any): (boo
 
 	local seat = car:FindFirstChild("DriveSeat", true)
 	if seat and seat:IsA("VehicleSeat") then
-		task.defer(function()
-			if humanoid.Parent and seat.Parent then
+		-- Sit only once the car has reached the player's client: the default control script picks up a
+		-- VehicleSeat only if it already exists there when the Humanoid sits, otherwise W/A/S/D do nothing.
+		local sitDelay = math.clamp(0.3 + player:GetNetworkPing() * 3, 0.3, 2)
+		task.delay(sitDelay, function()
+			if humanoid.Parent and seat.Parent and activeCars[player] == car then
 				seat:Sit(humanoid)
 			end
 		end)

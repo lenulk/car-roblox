@@ -266,7 +266,7 @@ return function(level: number, accent: Color3, opts: { [string]: any }?): Model
 					Vector3.new(0.45, 0.6, 0.06),
 					CFrame.new(post.Position.X + dx, y, -2.97),
 					RUST,
-					{ Material = Enum.Material.Rust, CanCollide = false, CastShadow = false }
+					{ Material = Enum.Material.CorrodedMetal, CanCollide = false, CastShadow = false }
 				)
 			end
 		end

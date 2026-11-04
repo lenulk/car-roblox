@@ -1,13 +1,17 @@
 --!strict
 -- NpcBuilder: charming R15 characters built from colors and small welded Parts (no asset ids), plus a
--- procedural animation system driven by Motor6D.Transform (walk / idle / work), and anchored-root
--- movement helpers (place / walkPath / turnTo). Server only.
+-- animation controls (walk / idle / work / held poses) whose state the clients play (see Shared/NpcAnim),
+-- and anchored-root movement helpers (place / walkPath / turnTo). Server only.
 --
 -- Facing convention: a character's front is its root's -Z, so yaw = atan2(-look.X, -look.Z).
--- Joint sign convention used by the poses (Euler X on a hanging limb): positive swings it forward (-Z).
 
+local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+
+local NpcAnim = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("NpcAnim") :: ModuleScript)
 
 local NpcBuilder = {}
 
@@ -28,7 +32,6 @@ local rng = Random.new()
 
 local V3 = Vector3.new
 local CF = CFrame.new
-local IDENTITY = CFrame.new()
 local SMOOTH = Enum.Material.SmoothPlastic
 local TWO_PI = math.pi * 2
 
@@ -425,6 +428,61 @@ local function addBackpack(model: Model, color: Color3)
 	end
 end
 
+-- Shopper extras (all small welded parts; nothing changes body size or foot height).
+
+local function addGlasses(model: Model, head: BasePart, sunglasses: boolean)
+	local frameColor = if sunglasses then INK else Color3.fromRGB(70, 60, 56)
+	local lensColor = if sunglasses then Color3.fromRGB(30, 34, 44) else Color3.fromRGB(190, 225, 245)
+	for _, side in { -1, 1 } do
+		attach(model, head, "GlassesFrame", V3(0.4, 0.34, 0.04), frameColor, CF(side * 0.24, 0.08, FACE_Z - 0.035))
+		local lens = attach(model, head, "GlassesLens", V3(0.3, 0.24, 0.04), lensColor, CF(side * 0.24, 0.08, FACE_Z - 0.06))
+		lens.Transparency = if sunglasses then 0.15 else 0.55
+		bar(model, head, "GlassesArm", V3(side * 0.44, 0.1, FACE_Z - 0.03), V3(side * 0.62, 0.1, -0.35), 0.05, frameColor)
+	end
+	attach(model, head, "GlassesBridge", V3(0.12, 0.05, 0.05), frameColor, CF(0, 0.12, FACE_Z - 0.05))
+end
+
+local function addScarf(model: Model, torso: BasePart, color: Color3)
+	local dark = darker(color, 0.25)
+	local topY = torso.Size.Y / 2 - 0.12
+	attach(model, torso, "ScarfWrap", V3(torso.Size.X * 0.78, 0.4, torso.Size.Z + 0.22), color, CF(0, topY, 0))
+	attach(model, torso, "ScarfBand", V3(torso.Size.X * 0.8, 0.1, torso.Size.Z + 0.26), dark, CF(0, topY - 0.08, 0))
+	attach(model, torso, "ScarfTail", V3(0.38, 0.95, 0.08), color, CF(0.35, topY - 0.55, -torso.Size.Z / 2 - 0.14))
+	attach(model, torso, "ScarfTailEnd", V3(0.38, 0.12, 0.09), dark, CF(0.35, topY - 1.0, -torso.Size.Z / 2 - 0.14))
+end
+
+local function addBeanie(model: Model, head: BasePart, color: Color3)
+	local dark = darker(color, 0.25)
+	attach(model, head, "BeanieDome", V3(1.5, 1.5, 1.5), color, CF(0, 0.3, 0.08), Enum.PartType.Ball)
+	attach(model, head, "BeanieFold", V3(0.3, 1.46, 1.46), dark, CF(0, 0.2, 0.06) * CFrame.Angles(0, 0, math.pi / 2), Enum.PartType.Cylinder)
+	attach(model, head, "BeanieBobble", V3(0.34, 0.34, 0.34), dark, CF(0, 1.05, 0.08), Enum.PartType.Ball)
+end
+
+-- Hood pulled up over the head (tinted like the shirt so theme recolors keep matching).
+local function addHood(model: Model, head: BasePart, torso: BasePart)
+	local shell = attach(model, head, "HoodShell", V3(1.5, 1.5, 1.5), WHITE, CF(0, 0.1, 0.2), Enum.PartType.Ball)
+	shell:SetAttribute("Tint", "shirt")
+	local rim = attach(model, head, "HoodRim", V3(1.0, 0.1, 0.1), WHITE, CF(0, 0.58, -0.6))
+	rim:SetAttribute("Tint", "shirtDark")
+	local drape = attach(model, torso, "HoodDrape", V3(1.35, 0.5, 0.4), WHITE, CF(0, torso.Size.Y / 2 - 0.1, torso.Size.Z / 2 + 0.12))
+	drape:SetAttribute("Tint", "shirt")
+end
+
+local function addStripes(model: Model, torso: BasePart)
+	for _, y in { 0.15, -0.3 } do
+		local stripe = attach(model, torso, "ShirtStripe", V3(torso.Size.X + 0.04, 0.2, torso.Size.Z + 0.04), WHITE, CF(0, y, 0))
+		stripe:SetAttribute("Tint", "shirtDark")
+	end
+end
+
+local function addChestPocket(model: Model, torso: BasePart)
+	local z = -torso.Size.Z / 2 - 0.03
+	local pocket = attach(model, torso, "ChestPocket", V3(0.5, 0.5, 0.06), WHITE, CF(torso.Size.X * 0.22, 0.25, z))
+	pocket:SetAttribute("Tint", "shirtDark")
+	local flap = attach(model, torso, "ChestPocketFlap", V3(0.5, 0.1, 0.07), WHITE, CF(torso.Size.X * 0.22, 0.47, z - 0.005))
+	flap:SetAttribute("Tint", "shirtDark")
+end
+
 ----------------------------------------------------------------------------------------------------
 -- Outfit colors
 ----------------------------------------------------------------------------------------------------
@@ -647,11 +705,64 @@ local function pick<T>(list: { T }): T
 	return list[rng:NextInteger(1, #list)]
 end
 
+-- Weighted shopper traits. Traits of the same group never appear together (one hat, one thing in the
+-- right hand ...), and most shoppers get none or one so the crowd stays mostly plain.
+local SHOPPER_TRAITS: { { id: string, weight: number, group: string } } = {
+	{ id = "cap", weight = 18, group = "head" },
+	{ id = "beanie", weight = 9, group = "head" },
+	{ id = "hood", weight = 8, group = "head" },
+	{ id = "glasses", weight = 14, group = "face" },
+	{ id = "scarf", weight = 8, group = "neck" },
+	{ id = "shorts", weight = 9, group = "legs" },
+	{ id = "longSleeves", weight = 9, group = "sleeves" },
+	{ id = "stripes", weight = 9, group = "pattern" },
+	{ id = "chestPocket", weight = 7, group = "pattern" },
+	{ id = "tote", weight = 12, group = "hand" },
+	{ id = "phone", weight = 9, group = "hand" },
+	{ id = "pocket", weight = 7, group = "hand" },
+	{ id = "backpack", weight = 9, group = "back" },
+}
+
+local function rollTraits(): { [string]: boolean }
+	local roll = rng:NextNumber()
+	local count = if roll < 0.35 then 0 elseif roll < 0.8 then 1 else 2
+	local picked: { [string]: boolean } = {}
+	local usedGroups: { [string]: boolean } = {}
+	for _ = 1, count do
+		local total = 0
+		for _, trait in SHOPPER_TRAITS do
+			if not usedGroups[trait.group] then
+				total += trait.weight
+			end
+		end
+		if total <= 0 then
+			break
+		end
+		local target = rng:NextNumber() * total
+		for _, trait in SHOPPER_TRAITS do
+			if not usedGroups[trait.group] then
+				target -= trait.weight
+				if target <= 0 then
+					picked[trait.id] = true
+					usedGroups[trait.group] = true
+					break
+				end
+			end
+		end
+	end
+	return picked
+end
+
 function NpcBuilder.randomShopper(): Model
 	local shirt = pick(SHIRT_COLORS)
+	local traits = rollTraits()
 	local accessory: string? = nil
-	if rng:NextNumber() < 0.28 then
+	if traits.cap then
 		accessory = "cap"
+	end
+	local hairStyle = if rng:NextNumber() < 0.08 then 0 else rng:NextInteger(1, 4)
+	if traits.hood then
+		hairStyle = 0 -- the hood covers the hair
 	end
 	local model = NpcBuilder.character({
 		shirt = shirt,
@@ -659,7 +770,7 @@ function NpcBuilder.randomShopper(): Model
 		skin = pick(SKIN_TONES),
 		accessory = accessory,
 		hair = pick(HAIR_COLORS),
-		hairStyle = if rng:NextNumber() < 0.08 then 0 else rng:NextInteger(1, 4),
+		hairStyle = hairStyle,
 	})
 	model.Name = "Shopper"
 
@@ -675,12 +786,55 @@ function NpcBuilder.randomShopper(): Model
 		end
 	end
 
-	local roll = rng:NextNumber()
-	if roll < 0.35 then
+	local head = getPart(model, "Head")
+	local torso = getPart(model, "UpperTorso")
+	if head and torso then
+		if traits.glasses then
+			addGlasses(model, head, rng:NextNumber() < 0.35)
+		end
+		if traits.beanie then
+			addBeanie(model, head, pick(SHIRT_COLORS))
+		end
+		if traits.hood then
+			addHood(model, head, torso)
+		end
+		if traits.scarf then
+			addScarf(model, torso, pick(SHIRT_COLORS))
+		end
+		if traits.stripes then
+			addStripes(model, torso)
+		end
+		if traits.chestPocket then
+			addChestPocket(model, torso)
+		end
+	end
+	if traits.shorts then
+		-- Bare calves: the lower legs take the skin color (upper legs keep the pants color).
+		local skinAttr: any = model:GetAttribute("NpcSkin")
+		local skin = if typeof(skinAttr) == "Color3" then (skinAttr :: Color3) else DEFAULT_SKIN
+		for _, name in { "LeftLowerLeg", "RightLowerLeg" } do
+			local part = getPart(model, name)
+			if part then
+				part.Color = skin
+			end
+		end
+	end
+	if traits.longSleeves then
+		model:SetAttribute("NpcLongSleeves", true)
+	end
+	if traits.tote then
 		addTote(model, pick(SHIRT_COLORS))
-	elseif roll < 0.55 then
+	end
+	if traits.backpack then
 		addBackpack(model, pick(SHIRT_COLORS))
 	end
+	if traits.phone then
+		model:SetAttribute("NpcQuirk", "phone")
+	elseif traits.pocket then
+		model:SetAttribute("NpcQuirk", "pocket")
+	end
+	-- Re-tint the new shirt-colored pieces (hood, stripes, pocket) and long sleeves.
+	NpcBuilder.applyShirt(model, shirt)
 	for _, d in model:GetDescendants() do
 		if d:IsA("BasePart") then
 			d.CanCollide = false
@@ -691,279 +845,127 @@ function NpcBuilder.randomShopper(): Model
 end
 
 ----------------------------------------------------------------------------------------------------
--- Procedural animation: layers (walk / idle / work) blended per model, one shared Heartbeat
+-- Animation state: published as model Attributes, played by the clients (Shared/NpcAnim, NpcAnimator).
+-- Joint Transforms written on the server never reach the clients, so nothing is posed here. The server
+-- only keeps the hammer-blow timer, on the same clock the clients animate with.
 ----------------------------------------------------------------------------------------------------
-
-type Pose = { [string]: Vector3 }
-
-type Rig = {
-	model: Model,
-	joints: { [string]: Motor6D },
-	layers: { Layer },
-	acc: Pose,
-	dead: boolean,
-}
 
 type Layer = {
 	rig: Rig,
 	kind: string, -- "walk" | "idle" | "work"
 	style: string,
-	weight: number,
+	targetAttr: string,
 	target: number,
-	time: number,
-	rate: number, -- time units per second (walk: radians of gait phase)
-	speed: number, -- walk speed in studs / second
-	waveStart: number,
-	waveUntil: number,
+	t0: number, -- server time the layer's clock started (idle / work)
+	playedAt: number, -- server time the layer was last switched on
 }
 
-local JOINT_NAMES = {
-	"Root", "Waist", "Neck",
-	"LeftShoulder", "RightShoulder", "LeftElbow", "RightElbow",
-	"LeftHip", "RightHip", "LeftKnee", "RightKnee", "LeftAnkle", "RightAnkle",
+type Rig = {
+	model: Model,
+	dead: boolean,
+	hammer: Layer?, -- the "hammer" work layer, if any
+	onStrike: (() -> ())?,
+	strikeIndex: number?,
 }
-local JOINT_SET: { [string]: boolean } = {}
-for _, name in JOINT_NAMES do
-	JOINT_SET[name] = true
-end
-local POSE_KEYS: { string } = table.clone(JOINT_NAMES)
-table.insert(POSE_KEYS, "RootPos")
 
-local FADE_SECONDS = 0.22
-local CYCLE_LENGTH = 7 -- studs travelled per full gait cycle (two steps)
-local DEFAULT_WALK_SPEED = 7
-local HIP_AMP = 0.55
-local KNEE_AMP = 0.95
-local ARM_AMP = 0.5
+local SPEED_STEP = 0.25 -- AnimSpeed / AnimLean are rounded so a steady walk does not spam attribute updates
+local LEAN_STEP = 0.01
+local STRIKE_FADE_IN = 0.11 -- the work pose is mostly blended in after this long
 
 local rigs: { [Model]: Rig } = {}
-local activeRigs: { [Rig]: boolean } = {}
-local connection: RBXScriptConnection? = nil
-local scratch: Pose = {}
+local strikeRigs: { [Rig]: boolean } = {}
+local strikeConnection: RBXScriptConnection? = nil
 
 local function getRig(model: Model): Rig
 	local existing = rigs[model]
 	if existing then
 		return existing
 	end
-	local joints: { [string]: Motor6D } = {}
-	for _, d in model:GetDescendants() do
-		if d:IsA("Motor6D") and JOINT_SET[d.Name] and joints[d.Name] == nil then
-			joints[d.Name] = d
-		end
-	end
-	local rig: Rig = { model = model, joints = joints, layers = {}, acc = {}, dead = false }
+	local rig: Rig = {
+		model = model,
+		dead = false,
+		hammer = nil,
+		onStrike = nil,
+		strikeIndex = nil,
+	}
 	rigs[model] = rig
+	CollectionService:AddTag(model, NpcAnim.TAG)
 	model.Destroying:Connect(function()
 		rig.dead = true
-		activeRigs[rig] = nil
+		strikeRigs[rig] = nil
 		rigs[model] = nil
 	end)
 	return rig
 end
 
-local function smooth(x: number): number
-	x = math.clamp(x, 0, 1)
-	return x * x * (3 - 2 * x)
-end
-
-local function poseWalk(layer: Layer, t: number, pose: Pose)
-	local amp = math.clamp(layer.speed / 6, 0, 1.25)
-	local s, c = math.sin(t), math.cos(t)
-	local hipL = HIP_AMP * amp * s
-	local hipR = -hipL
-	local kneeL = -(KNEE_AMP * amp * math.max(0, c) + 0.06 * amp)
-	local kneeR = -(KNEE_AMP * amp * math.max(0, -c) + 0.06 * amp)
-	pose.LeftHip = V3(hipL, 0, 0)
-	pose.RightHip = V3(hipR, 0, 0)
-	pose.LeftKnee = V3(kneeL, 0, 0)
-	pose.RightKnee = V3(kneeR, 0, 0)
-	pose.LeftAnkle = V3(-(hipL + kneeL) * 0.6, 0, 0)
-	pose.RightAnkle = V3(-(hipR + kneeR) * 0.6, 0, 0)
-	pose.LeftShoulder = V3(-ARM_AMP * amp * s, 0, -0.06)
-	pose.RightShoulder = V3(ARM_AMP * amp * s, 0, 0.06)
-	pose.LeftElbow = V3(0.2 + 0.45 * amp * math.max(0, -s), 0, 0)
-	pose.RightElbow = V3(0.2 + 0.45 * amp * math.max(0, s), 0, 0)
-	pose.Root = V3(0, -0.08 * amp * s, 0.03 * amp * s)
-	pose.Waist = V3(-0.04 * amp, 0.16 * amp * s, -0.03 * amp * s)
-	pose.Neck = V3(0.03 - 0.02 * amp * math.cos(2 * t), -0.08 * amp * s, 0)
-	pose.RootPos = V3(0, amp * (0.07 * math.cos(2 * t) - 0.03), 0)
-end
-
-local function poseIdle(layer: Layer, t: number, pose: Pose)
-	local breath = math.sin(t * 2.1)
-	local sway = math.sin(t * 0.9)
-	pose.RootPos = V3(0, 0.02 * breath, 0)
-	pose.Root = V3(0, 0.03 * math.sin(t * 0.5), 0.02 * sway)
-	pose.Waist = V3(0.01 + 0.015 * breath, 0.04 * math.sin(t * 0.6 + 1), -0.02 * sway)
-	pose.Neck = V3(0.02 * math.sin(t * 0.8), 0.2 * (math.sin(t * 0.37) + 0.5 * math.sin(t * 0.91)), 0)
-	local armSwing = 0.04 * math.sin(t * 1.3)
-	pose.LeftShoulder = V3(armSwing, 0, -0.07 - 0.02 * breath)
-	pose.LeftElbow = V3(0.12 + 0.02 * breath, 0, 0)
-	local rightShoulder = V3(-armSwing, 0, 0.07 + 0.02 * breath)
-	local rightElbow = V3(0.12 + 0.02 * breath, 0, 0)
-
-	if layer.waveUntil > t then
-		local e = smooth(math.min((t - layer.waveStart) / 0.35, (layer.waveUntil - t) / 0.35))
-		rightShoulder = rightShoulder:Lerp(V3(0.1, 0, 2.3), e)
-		rightElbow = rightElbow:Lerp(V3(0, 0, 0.25 + 0.55 * math.sin((t - layer.waveStart) * 12)), e)
-		pose.Neck = pose.Neck:Lerp(V3(0, 0, 0.06), e)
-	end
-	pose.RightShoulder = rightShoulder
-	pose.RightElbow = rightElbow
-end
-
-local function poseWork(layer: Layer, t: number, pose: Pose)
-	local style = layer.style
-	if style == "spray" then
-		local sweep = math.sin(t * 2.4)
-		pose.RightShoulder = V3(1.45, 0, 0.4 * sweep)
-		pose.RightElbow = V3(0.15, 0, 0)
-		pose.LeftShoulder = V3(0.15, 0, -0.25)
-		pose.LeftElbow = V3(0.95, 0, 0)
-		pose.Waist = V3(-0.05, 0.14 * sweep, 0)
-		pose.Neck = V3(-0.05, -0.1 * sweep, 0)
-		pose.Root = V3(0, -0.04 * sweep, 0.02 * sweep)
-		pose.RootPos = V3(0, 0.01 * math.sin(t * 2.1), 0)
-	elseif style == "reach" then
-		local k = math.sin(t * 2.2)
-		pose.RightShoulder = V3(1.25 + 0.25 * k, 0, 0.12)
-		pose.RightElbow = V3(0.55 + 0.25 * math.sin(t * 2.2 + 1), 0, 0)
-		pose.LeftShoulder = V3(0.25, 0, -0.1)
-		pose.LeftElbow = V3(0.6 + 0.1 * math.sin(t * 1.5), 0, 0)
-		pose.Waist = V3(-0.06 + 0.02 * k, 0.1 * math.sin(t * 1.1), 0)
-		pose.Neck = V3(-0.08, 0.35 * math.sin(t * 1.1), 0)
-		pose.RootPos = V3(0, 0.01 * math.sin(t * 2.1), 0)
-		pose.Root = V3(0, 0.03 * math.sin(t * 1.1), 0)
-	else
-		-- hammer: slow wind-up, fast strike, short pause
-		local p = (t * 1.15) % 1
-		local u: number
-		if p < 0.65 then
-			u = smooth(p / 0.65)
-		else
-			local q = (p - 0.65) / 0.35
-			u = 1 - q * q
+-- Blow detection for the hammer pose: same phase formula as NpcAnim, evaluated on the shared server clock.
+local function strikeStep()
+	local now = Workspace:GetServerTimeNow()
+	for rig in strikeRigs do
+		local layer = rig.hammer
+		local onStrike = rig.onStrike
+		if rig.dead or layer == nil or onStrike == nil then
+			strikeRigs[rig] = nil
+			continue
 		end
-		local down = 1 - u
-		pose.RightShoulder = V3(0.5 + 1.2 * u, 0, 0.1)
-		pose.RightElbow = V3(0.35 + 0.7 * u, 0, 0)
-		pose.LeftShoulder = V3(0.6 + 0.1 * down, 0, -0.12)
-		pose.LeftElbow = V3(0.9 + 0.1 * down, 0, 0)
-		pose.Waist = V3(-(0.05 + 0.12 * down), 0.04 * math.sin(t * 0.7), 0)
-		pose.Neck = V3(-0.1 + 0.05 * u, 0, 0)
-		pose.RootPos = V3(0, -0.05 * down, 0)
-		pose.LeftHip = V3(-0.12, 0, -0.05)
-		pose.RightHip = V3(0.12, 0, 0.05)
-		pose.LeftKnee = V3(-0.1, 0, 0)
-		pose.RightKnee = V3(-0.1, 0, 0)
+		if layer.target > 0 and now - layer.playedAt > STRIKE_FADE_IN then
+			local index = math.floor((now - layer.t0) * NpcAnim.HAMMER_RATE - NpcAnim.HAMMER_STRIKE_PHASE)
+			local previous = rig.strikeIndex
+			rig.strikeIndex = index
+			if previous ~= nil and index > previous then
+				pcall(onStrike)
+			end
+		else
+			rig.strikeIndex = nil
+		end
+	end
+	if next(strikeRigs) == nil and strikeConnection then
+		strikeConnection:Disconnect()
+		strikeConnection = nil
 	end
 end
 
-local function writeIdentity(rig: Rig)
-	for _, motor in rig.joints do
-		motor.Transform = IDENTITY
-	end
-end
-
-local function updateRig(rig: Rig, dt: number)
-	if rig.dead then
-		activeRigs[rig] = nil
+local function refreshStrike(rig: Rig)
+	local layer = rig.hammer
+	if rig.dead or layer == nil or layer.target <= 0 or rig.onStrike == nil then
+		strikeRigs[rig] = nil
+		rig.strikeIndex = nil
 		return
 	end
-	local acc = rig.acc
-	for _, key in POSE_KEYS do
-		acc[key] = Vector3.zero
-	end
-	local sumWeight = 0
-	local anyLive = false
-
-	for _, layer in rig.layers do
-		local weight = layer.weight
-		local target = layer.target
-		if weight ~= target then
-			if weight < target then
-				weight = math.min(target, weight + dt / FADE_SECONDS)
-			else
-				weight = math.max(target, weight - dt / FADE_SECONDS)
-			end
-			layer.weight = weight
-		end
-		if weight > 0 or target > 0 then
-			anyLive = true
-			layer.time += dt * layer.rate
-			if weight > 0 then
-				for _, key in POSE_KEYS do
-					scratch[key] = Vector3.zero
-				end
-				if layer.kind == "walk" then
-					poseWalk(layer, layer.time, scratch)
-				elseif layer.kind == "idle" then
-					poseIdle(layer, layer.time, scratch)
-				else
-					poseWork(layer, layer.time, scratch)
-				end
-				sumWeight += weight
-				for _, key in POSE_KEYS do
-					acc[key] += scratch[key] * weight
-				end
-			end
-		end
-	end
-
-	if not anyLive then
-		writeIdentity(rig)
-		activeRigs[rig] = nil
-		return
-	end
-
-	local norm = if sumWeight > 1 then 1 / sumWeight else 1
-	for name, motor in rig.joints do
-		local v = acc[name] * norm
-		if name == "Root" then
-			motor.Transform = CF(acc.RootPos * norm) * CFrame.Angles(v.X, v.Y, v.Z)
-		else
-			motor.Transform = CFrame.Angles(v.X, v.Y, v.Z)
-		end
-	end
-end
-
-local function step(dt: number)
-	dt = math.min(dt, 0.1)
-	for rig in activeRigs do
-		updateRig(rig, dt)
-	end
-	if next(activeRigs) == nil and connection then
-		connection:Disconnect()
-		connection = nil
-	end
-end
-
-local function activate(rig: Rig)
-	activeRigs[rig] = true
-	if connection == nil then
-		connection = RunService.Heartbeat:Connect(step)
+	strikeRigs[rig] = true
+	if strikeConnection == nil then
+		strikeConnection = RunService.Heartbeat:Connect(strikeStep)
 	end
 end
 
 local function newLayer(model: Model, kind: string, style: string): Layer
 	local rig = getRig(model)
+	local targetAttr = "AnimWalk"
+	local t0Attr: string? = nil
+	if kind == "idle" then
+		targetAttr = "AnimIdle"
+		t0Attr = "AnimIdleT0"
+	elseif kind == "work" then
+		targetAttr = "AnimWork_" .. style
+		t0Attr = "AnimWorkT0_" .. style
+	end
+	local now = Workspace:GetServerTimeNow()
 	local layer: Layer = {
 		rig = rig,
 		kind = kind,
 		style = style,
-		weight = 0,
+		targetAttr = targetAttr,
 		target = 0,
-		time = rng:NextNumber() * 10,
-		rate = 1,
-		speed = DEFAULT_WALK_SPEED,
-		waveStart = -1,
-		waveUntil = -1,
+		t0 = now - rng:NextNumber() * 10, -- random start phase so a crowd does not move in lockstep
+		playedAt = now,
 	}
-	if kind == "walk" then
-		layer.rate = TWO_PI * layer.speed / CYCLE_LENGTH
+	if t0Attr then
+		model:SetAttribute(t0Attr, layer.t0)
 	end
-	table.insert(rig.layers, layer)
+	model:SetAttribute(targetAttr, 0)
+	if kind == "work" and style == "hammer" then
+		rig.hammer = layer
+	end
 	return layer
 end
 
@@ -972,10 +974,18 @@ local function setTarget(layer: Layer, target: number)
 	if rig.dead then
 		return
 	end
-	layer.target = target
-	if target > 0 or layer.weight > 0 then
-		activate(rig)
+	if target > 0 and layer.target <= 0 then
+		layer.playedAt = Workspace:GetServerTimeNow()
 	end
+	layer.target = target
+	rig.model:SetAttribute(layer.targetAttr, target)
+	if layer == rig.hammer then
+		refreshStrike(rig)
+	end
+end
+
+local function roundTo(value: number, step: number): number
+	return math.floor(value / step + 0.5) * step
 end
 
 --[[
@@ -992,8 +1002,9 @@ function NpcBuilder.walkCycle(model: Model): WalkController
 			setTarget(layer, 0)
 		end,
 		setSpeed = function(speed: number)
-			layer.speed = math.max(0, speed)
-			layer.rate = TWO_PI * layer.speed / CYCLE_LENGTH
+			if not layer.rig.dead then
+				model:SetAttribute("AnimSpeed", roundTo(math.max(0, speed), SPEED_STEP))
+			end
 		end,
 	}
 end
@@ -1009,15 +1020,24 @@ function NpcBuilder.idle(model: Model): IdleController
 			setTarget(layer, 0)
 		end,
 		wave = function(duration: number?)
-			layer.waveStart = layer.time
-			layer.waveUntil = layer.time + (duration or 2)
+			if layer.rig.dead then
+				return
+			end
+			model:SetAttribute("AnimWaveDur", duration or 2)
+			model:SetAttribute("AnimWaveAt", Workspace:GetServerTimeNow())
 		end,
 	}
 end
 
 -- Working arm motion. style: "hammer" (default, strike), "spray" (sweeping arm), "reach" (browse / stock shelves).
 function NpcBuilder.work(model: Model, style: string?): Controller
-	local layer = newLayer(model, "work", style or "hammer")
+	local chosen = "hammer"
+	for _, known in NpcAnim.WORK_STYLES do
+		if known == style then
+			chosen = known
+		end
+	end
+	local layer = newLayer(model, "work", chosen)
 	return {
 		play = function()
 			setTarget(layer, 1)
@@ -1028,9 +1048,97 @@ function NpcBuilder.work(model: Model, style: string?): Controller
 	}
 end
 
+-- Holds a cardboard box in front of the chest with both arms (true) or puts it away (false).
+function NpcBuilder.setCarry(model: Model, carrying: boolean)
+	for _, child in model:GetChildren() do
+		if child:GetAttribute("NpcCarry") == true then
+			child:Destroy()
+		end
+	end
+	local rig = getRig(model)
+	if rig.dead then
+		return
+	end
+	model:SetAttribute("AnimCarry", carrying)
+	local torso = getPart(model, "UpperTorso")
+	if not carrying or torso == nil then
+		return
+	end
+	local offset = CF(0, -0.35, -1.25)
+	local box = attach(model, torso, "CarryBox", V3(1.9, 1.3, 1.4), Color3.fromRGB(196, 154, 108), offset)
+	local tape = attach(model, torso, "CarryBoxTape", V3(0.35, 1.32, 1.42), Color3.fromRGB(225, 200, 150), offset)
+	box:SetAttribute("NpcCarry", true)
+	tape:SetAttribute("NpcCarry", true)
+end
+
+--[[
+	Turns the head (Neck, plus a little Waist) toward a world position; nil stops looking. The turn is
+	blended in and out and limited to about +-1 rad. Targets behind or beside the character are ignored.
+	Call it again whenever the target moves (it follows smoothly, so a low update rate is fine).
+]]
+function NpcBuilder.lookAt(model: Model, worldPos: Vector3?)
+	local rig = rigs[model]
+	if rig == nil then
+		if worldPos == nil then
+			return
+		end
+		rig = getRig(model)
+	end
+	if rig.dead then
+		return
+	end
+	model:SetAttribute("AnimLook", worldPos)
+end
+
+-- Holds an arm pose that fades in and out: "phone" (right hand, with a small phone), "pocket", or nil.
+function NpcBuilder.setHold(model: Model, kind: string?)
+	for _, child in model:GetChildren() do
+		if child:GetAttribute("NpcHold") == true then
+			child:Destroy()
+		end
+	end
+	local rig = getRig(model)
+	if rig.dead then
+		return
+	end
+	model:SetAttribute("AnimHold", kind)
+	local hand = getPart(model, "RightHand")
+	if kind == "phone" and hand then
+		local body = attach(model, hand, "PhoneBody", V3(0.46, 0.8, 0.07), Color3.fromRGB(28, 28, 34), CF(0, -0.2, -0.25))
+		local screen = attach(model, hand, "PhoneScreen", V3(0.38, 0.68, 0.03), Color3.fromRGB(120, 190, 255), CF(0, -0.2, -0.3))
+		screen.Material = Enum.Material.Neon
+		body:SetAttribute("NpcHold", true)
+		screen:SetAttribute("NpcHold", true)
+	end
+end
+
+-- Bends the character forward from the waist and knees (0 = upright, 1 = full bend), smoothly.
+function NpcBuilder.setStoop(model: Model, amount: number)
+	local rig = getRig(model)
+	if rig.dead then
+		return
+	end
+	model:SetAttribute("AnimStoop", math.clamp(amount, 0, 1))
+end
+
+-- Registers a function that runs each time the "hammer" work pose lands a blow (nil removes it).
+function NpcBuilder.setStrikeHandler(model: Model, handler: (() -> ())?)
+	local rig = getRig(model)
+	if rig.dead then
+		return
+	end
+	rig.onStrike = handler
+	refreshStrike(rig)
+end
+
 ----------------------------------------------------------------------------------------------------
 -- Movement helpers (anchored root, yields on Heartbeat)
 ----------------------------------------------------------------------------------------------------
+
+local function smooth(x: number): number
+	x = math.clamp(x, 0, 1)
+	return x * x * (3 - 2 * x)
+end
 
 local function getRoot(model: Model): BasePart?
 	local root = model.PrimaryPart
@@ -1088,17 +1196,67 @@ function NpcBuilder.turnTo(model: Model, look: Vector3, duration: number?, shoul
 	return true
 end
 
+-- Turn lean (radians) for the clients; rounded so a steady walk publishes nothing.
+local function setLean(model: Model, lean: number)
+	model:SetAttribute("AnimLean", roundTo(lean, LEAN_STEP))
+end
+
+local AVOID_INTERVAL = 0.25 -- seconds between sidestep checks (walkPath's `avoid` callback)
+local AVOID_MAX = 1.2 -- largest sidestep, studs
+local AVOID_RELEASE_DISTANCE = 4 -- the sidestep fades out over the last studs of the final leg
+local CORNER_RADIUS = 2 -- studs cut off each sharp corner
+local CORNER_SLOW_DISTANCE = 5 -- studs before a sharp corner over which the walk eases down
+local CORNER_ANGLE_MIN = math.rad(12) -- corners gentler than this are left straight (no extra waypoints)
+
+-- Replaces each interior corner of `points` with two waypoints that cut the corner (so the path curves
+-- instead of hinging), and returns a per-waypoint speed factor (<1 right before a sharp turn). The very
+-- first and last points are kept exact so the walk still starts/ends precisely where asked.
+local function smoothCorners(startPos: Vector3, points: { Vector3 }): ({ Vector3 }, { number })
+	local route: { Vector3 } = {}
+	local slow: { number } = {}
+	local previous = startPos
+	local count = #points
+	for i, point in points do
+		local nextPoint = points[i + 1]
+		if i < count and nextPoint then
+			local inVec = V3(point.X - previous.X, 0, point.Z - previous.Z)
+			local outVec = V3(nextPoint.X - point.X, 0, nextPoint.Z - point.Z)
+			local inLen, outLen = inVec.Magnitude, outVec.Magnitude
+			if inLen > CORNER_RADIUS * 2 and outLen > CORNER_RADIUS * 2 then
+				local angle = math.abs(angleDiff(math.atan2(-outVec.X, -outVec.Z), math.atan2(-inVec.X, -inVec.Z)))
+				if angle > CORNER_ANGLE_MIN then
+					local cut = CORNER_RADIUS / inLen
+					table.insert(route, point - inVec * cut)
+					table.insert(slow, math.clamp(1 - angle / math.pi, 0.45, 1))
+					local cutOut = CORNER_RADIUS / outLen
+					table.insert(route, point + outVec * cutOut)
+					table.insert(slow, 1)
+					previous = point
+					continue
+				end
+			end
+		end
+		table.insert(route, point)
+		table.insert(slow, 1)
+		previous = point
+	end
+	return route, slow
+end
+
 --[[
 	Walks the character along floor-level world points at ~`speed` studs/s with its walk cycle, turning
-	smoothly to face the movement and easing to a stop at the last point. Yields until it arrives.
+	smoothly to face the movement and easing to a stop at the last point. Corners are cut into short
+	curves and the walk slows a little before a sharp one; the character leans into turns while moving
+	and only snaps its final facing after it has fully stopped. Yields until it arrives.
 	Returns true on arrival, false when `shouldStop()` became true or the model was destroyed.
 ]]
-function NpcBuilder.walkPath(
+local function walkPathRun(
 	model: Model,
 	walk: WalkController,
 	points: { Vector3 },
 	speed: number,
-	shouldStop: (() -> boolean)?
+	shouldStop: (() -> boolean)?,
+	avoid: ((Vector3, Vector3) -> number)?
 ): boolean
 	local root = getRoot(model)
 	if root == nil or #points == 0 then
@@ -1108,16 +1266,24 @@ function NpcBuilder.walkPath(
 	local startCF = root.CFrame
 	local pos = startCF.Position - V3(0, rootHeight, 0)
 	local yaw = yawOf(startCF)
+	-- Corners become short arcs; `slow` holds a speed factor per waypoint (<1 on the sharper bends).
+	local route, slow = smoothCorners(pos, points)
 
 	local function aborted(): boolean
 		return model.Parent == nil or (shouldStop ~= nil and shouldStop())
 	end
+	-- Sidestep: `offset` studs to the walker's right of the real path position `pos` (0 when not avoiding).
+	local offset = 0
+	local offsetGoal = 0
+	local avoidTimer = rng:NextNumber() * AVOID_INTERVAL -- staggered so walkers do not all check on one frame
 	local function setCFrame()
-		root.CFrame = CF(pos.X, pos.Y + rootHeight, pos.Z) * CFrame.Angles(0, yaw, 0)
+		local rotation = CFrame.Angles(0, yaw, 0)
+		local shift = rotation.RightVector * offset
+		root.CFrame = CF(pos.X + shift.X, pos.Y + rootHeight, pos.Z + shift.Z) * rotation
 	end
 
 	-- Turn on the spot first when the first leg points far away from where we face.
-	local first = points[1]
+	local first = route[1]
 	local firstDir = V3(first.X - pos.X, 0, first.Z - pos.Z)
 	if firstDir.Magnitude > 0.2 then
 		local desired = math.atan2(-firstDir.X, -firstDir.Z)
@@ -1137,16 +1303,17 @@ function NpcBuilder.walkPath(
 	walk.play()
 	local velocity = 0
 	local index = 1
-	local last = #points
+	local last = #route
 	local accel = math.max(speed, 1) * 5
 
 	while index <= last do
 		local dt = math.min(RunService.Heartbeat:Wait(), 0.1)
 		if aborted() then
 			walk.stop()
+			setLean(model, 0)
 			return false
 		end
-		local target = points[index]
+		local target = route[index]
 		local delta = target - pos
 		local flat = V3(delta.X, 0, delta.Z)
 		local flatDist = flat.Magnitude
@@ -1154,13 +1321,19 @@ function NpcBuilder.walkPath(
 		if flatDist < (if isLast then 0.05 else 0.4) then
 			if isLast then
 				pos = V3(target.X, target.Y, target.Z)
+				offset = 0 -- always finish exactly on the requested point
 				setCFrame()
 			end
 			index += 1
 			continue
 		end
 
-		local wanted = speed
+		-- The corner slowdown only applies in the last stretch before the bend, not along the whole leg.
+		local factor = slow[index]
+		if factor < 1 then
+			factor = 1 - (1 - factor) * math.clamp(1 - flatDist / CORNER_SLOW_DISTANCE, 0, 1)
+		end
+		local wanted = speed * factor
 		if isLast then
 			wanted = speed * math.clamp(flatDist / (speed * 0.5), 0.25, 1)
 		end
@@ -1169,12 +1342,56 @@ function NpcBuilder.walkPath(
 		pos += delta * (stepLength / math.max(delta.Magnitude, 1e-4))
 
 		local desired = math.atan2(-flat.X, -flat.Z)
-		yaw += angleDiff(desired, yaw) * (1 - math.exp(-10 * dt))
+		local turnRate = angleDiff(desired, yaw)
+		yaw += turnRate * (1 - math.exp(-10 * dt))
+		if avoid then
+			-- Ask the caller for a sidestep a few times per second, then ease toward it every frame.
+			avoidTimer -= dt
+			if avoidTimer <= 0 then
+				avoidTimer = AVOID_INTERVAL
+				local ok, value = pcall(avoid, pos, flat / flatDist)
+				offsetGoal = if ok and type(value) == "number" then math.clamp(value, -AVOID_MAX, AVOID_MAX) else 0
+			end
+			local goal = offsetGoal
+			if isLast then
+				goal *= smooth(flatDist / AVOID_RELEASE_DISTANCE) -- back to the path before the final stop
+			end
+			offset += (goal - offset) * (1 - math.exp(-(if isLast then 9 else 4) * dt))
+		end
 		setCFrame()
 		walk.setSpeed(velocity)
+		-- Lean into the turn while actually turning at speed; upright on straight stretches.
+		setLean(model, math.clamp(turnRate * 0.25, -0.1, 0.1) * math.clamp(velocity / math.max(speed, 0.1), 0, 1))
 	end
 
 	walk.stop()
+	setLean(model, 0)
+	return true
+end
+
+--[[
+	Walks the character along floor-level world points, then (if `finalLook` is given) turns to face it
+	only after coming to a full stop — avoids the "robot spins the instant it arrives" look. Same return
+	convention as the underlying walk.
+	Optional `avoid(position, forward)`: called about 4 times a second with the walker's path position and
+	unit heading; it returns a sidestep in studs (positive = to the walker's right, clamped to +-1.2). The
+	body shifts sideways smoothly and is back on the path before the last point, which is reached exactly.
+]]
+function NpcBuilder.walkPath(
+	model: Model,
+	walk: WalkController,
+	points: { Vector3 },
+	speed: number,
+	shouldStop: (() -> boolean)?,
+	finalLook: Vector3?,
+	avoid: ((Vector3, Vector3) -> number)?
+): boolean
+	if not walkPathRun(model, walk, points, speed, shouldStop, avoid) then
+		return false
+	end
+	if finalLook then
+		return NpcBuilder.turnTo(model, finalLook, nil, shouldStop)
+	end
 	return true
 end
 

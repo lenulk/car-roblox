@@ -15,11 +15,13 @@ local PlotService = require(script.Parent.PlotService)
 local UnlockService = require(script.Parent.UnlockService)
 local HireService = require(script.Parent.HireService)
 local EconomyService = require(script.Parent.EconomyService)
+local CustomerService = require(script.Parent.CustomerService)
 
 local OfflineService = {}
 
--- Average pay per second of a bay worked by its mechanic/painter.
-local function bayRate(player: Player, bayIndex: number, station: string, staffLevel: number): number
+-- Average pay per second of a bay worked by its mechanic/painter (if it never waits for a car),
+-- plus how many jobs per second that is.
+local function bayRate(player: Player, bayIndex: number, station: string, staffLevel: number): (number, number)
 	local level = math.max(1, UnlockService.stationLevel(player, station))
 	local levelData = Stations.LEVELS[level]
 	local totalPay, totalTime, count = 0, 0, 0
@@ -33,29 +35,56 @@ local function bayRate(player: Player, bayIndex: number, station: string, staffL
 		end
 	end
 	if count == 0 or totalTime <= 0 then
-		return 0
+		return 0, 0
 	end
 	local speed = Game.MECHANIC_SPEED[staffLevel] or Game.MECHANIC_SPEED[1]
-	return (totalPay / count) / ((totalTime / count) / speed)
+	local manager = HireService.managerLevel(player)
+	if manager > 0 then
+		speed *= 1 + (Game.MANAGER_SPEED[manager] or 0)
+	end
+	local jobsPerSecond = speed / (totalTime / count)
+	return (totalPay / count) * jobsPerSecond, jobsPerSecond
 end
 
+-- average items a walk-in shopper buys (ShopService.sell: math.random(1, 2))
+local ITEMS_PER_SHOPPER = 1.5
+
 local function estimatePerSecond(player: Player): number
-	local rate = 0
+	-- bays: staff can't fix more cars than customers bring in (one car per spawn interval)
+	local bayPay, bayJobs = 0, 0
 	local stations, bays = UnlockService.ownedBays(player)
 	for _, bayIndex in bays do
 		local staff = HireService.mechanicLevel(player, bayIndex)
 		if staff then
-			rate += bayRate(player, bayIndex, stations[bayIndex], staff)
+			local pay, jobs = bayRate(player, bayIndex, stations[bayIndex], staff)
+			bayPay += pay
+			bayJobs += jobs
 		end
 	end
+	local rate = bayPay
+	local arrivals = 1 / math.max(CustomerService.spawnInterval(player), 0.1)
+	if bayJobs > arrivals then
+		rate *= arrivals / bayJobs
+	end
+
+	-- shelves: limited by both restocking and how many shoppers walk in (shared by all shelves)
 	local stocker = HireService.stockerLevel(player)
 	local restockSpeed = if stocker > 0 then Game.STOCKER_SPEED[stocker] or 1 else 1
+	local restockRate, priceSum, shelfCount = 0, 0, 0
 	for _, shelfId in Shelves.order do
 		local level = UnlockService.level(player, shelfId)
 		if level > 0 then
 			local price = Shelves.byId[shelfId].basePrice * Shelves.LEVELS[level].priceMult
-			rate += price * restockSpeed / Shelves.RESTOCK_SECONDS
+			restockRate += price * restockSpeed / Shelves.RESTOCK_SECONDS
+			priceSum += price
+			shelfCount += 1
 		end
+	end
+	if shelfCount > 0 then
+		local reception = HireService.receptionistLevel(player)
+		local interval = Shelves.SHOPPER_INTERVAL * (if reception > 0 then Game.RECEPTION_SPAWN_MULT[reception] or 1 else 1)
+		local demandRate = (priceSum / shelfCount) * ITEMS_PER_SHOPPER / interval
+		rate += math.min(restockRate, demandRate)
 	end
 	return rate
 end

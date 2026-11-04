@@ -287,7 +287,7 @@ function ModelKit.rustPatches(parent: Instance, onto: BasePart, count: number, s
 		local x = rng:NextNumber(-s.X / 2 + w, s.X / 2 - w)
 		local y = rng:NextNumber(-s.Y / 2 + h, s.Y / 2 - h)
 		ModelKit.part(parent, "Rust", Vector3.new(w, h, 0.05), onto.CFrame * CFrame.new(x, y, -s.Z / 2 - 0.02), Color3.fromRGB(122, 70, 38), {
-			Material = Enum.Material.Rust,
+			Material = Enum.Material.CorrodedMetal,
 			CanCollide = false,
 			CastShadow = false,
 		})

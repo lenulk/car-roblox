@@ -127,10 +127,14 @@ function HireService.npcAt(plotIndex: number, slot: string): Model?
 end
 
 local function spawnNpc(plotIndex: number, employee: PlayerData.Employee)
-	npcs[plotIndex] = npcs[plotIndex] or {}
 	local ok, model = pcall(EmployeeService.spawn, plotIndex, employee.role, employee.slot, employee.level)
-	if ok and model then
+	-- spawn yields: the plot may have been cleared (leave/rebirth) meanwhile, so re-read the table
+	-- and skip models EmployeeService already destroyed
+	if ok and model and model.Parent ~= nil then
+		npcs[plotIndex] = npcs[plotIndex] or {}
 		npcs[plotIndex][employee.slot] = model
+	elseif ok and model then
+		return
 	else
 		warn("[HireService] Could not spawn employee: " .. tostring(model))
 	end
@@ -171,12 +175,18 @@ local function hire(player: Player, role: any): (boolean, string)
 			d.tutorialStep = 3
 		end
 	end)
-	spawnNpc(plotIndex, employee)
-	local npc = HireService.npcAt(plotIndex, employee.slot)
-	local position = if npc then npc:GetPivot().Position else Layout.toWorld(plotIndex, Layout.HIRE_BOARD).Position
-	Remotes.get("Effect"):FireClient(player, "Unlock", position)
-	notify(player, "notify_hired", { Strings.get(data.settings.lang, "role_" .. role) })
+	-- money is already spent: an error below must not leave the player locked out of hiring
+	local ok, err = pcall(function()
+		spawnNpc(plotIndex, employee)
+		local npc = HireService.npcAt(plotIndex, employee.slot)
+		local position = if npc then npc:GetPivot().Position else Layout.toWorld(plotIndex, Layout.HIRE_BOARD).Position
+		Remotes.get("Effect"):FireClient(player, "Unlock", position)
+		notify(player, "notify_hired", { Strings.get(data.settings.lang, "role_" .. role) })
+	end)
 	busy[player] = nil
+	if not ok then
+		warn("[HireService] hire failed after charging: " .. tostring(err))
+	end
 	return true, "hire_ok"
 end
 
@@ -204,13 +214,18 @@ local function upgradeEmployee(player: Player, slot: any): (boolean, string)
 		d.money -= cost
 		employee.level += 1
 	end)
-	local npc = HireService.npcAt(plotIndex, slot)
-	if npc then
-		pcall(EmployeeService.setLevel, npc, employee.level)
-		Remotes.get("Effect"):FireClient(player, "Level", npc:GetPivot().Position)
-	end
-	notify(player, "notify_employee_upgraded", { Strings.get(data.settings.lang, "role_" .. employee.role), employee.level })
+	local ok, err = pcall(function()
+		local npc = HireService.npcAt(plotIndex, slot)
+		if npc then
+			pcall(EmployeeService.setLevel, npc, employee.level)
+			Remotes.get("Effect"):FireClient(player, "Level", npc:GetPivot().Position)
+		end
+		notify(player, "notify_employee_upgraded", { Strings.get(data.settings.lang, "role_" .. employee.role), employee.level })
+	end)
 	busy[player] = nil
+	if not ok then
+		warn("[HireService] upgrade failed after charging: " .. tostring(err))
+	end
 	return true, "notify_employee_upgraded"
 end
 

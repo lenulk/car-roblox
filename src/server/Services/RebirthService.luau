@@ -32,36 +32,42 @@ local function rebirth(player: Player): (boolean, string)
 		return false, "notify_rebirth_locked"
 	end
 	busy[player] = true
-
-	HireService.clearPlot(plotIndex)
-	UnlockService.resetPlot(plotIndex)
-	PlayerData.update(player, function(d)
-		d.rebirths += 1
-		d.money = Game.STARTING_MONEY
-		d.safe = 0
-		d.starPoints = 0
-		d.unlocks = {}
-		d.levels = {}
-		d.stock = {}
-		d.employees = {}
-		for _, entry in Unlocks.list do
-			if entry.startOwned then
-				d.unlocks[entry.id] = true
-				if entry.upgradable then
-					d.levels[entry.id] = 1
+	-- always release the lock, even if a reset step errors
+	local ok, err = pcall(function()
+		HireService.clearPlot(plotIndex)
+		UnlockService.resetPlot(plotIndex)
+		PlayerData.update(player, function(d)
+			d.rebirths += 1
+			d.money = Game.STARTING_MONEY
+			d.safe = 0
+			d.starPoints = 0
+			d.unlocks = {}
+			d.levels = {}
+			d.stock = {}
+			d.employees = {}
+			for _, entry in Unlocks.list do
+				if entry.startOwned then
+					d.unlocks[entry.id] = true
+					if entry.upgradable then
+						d.levels[entry.id] = 1
+					end
 				end
 			end
-		end
+		end)
+		UnlockService.restorePlot(player, plotIndex)
+		ThemeService.applyPlot(plotIndex)
+		CustomerService.restart(player, plotIndex)
+		ShopService.restart(player, plotIndex)
+	
+		local multiplier = EconomyService.multiplier(player)
+		Remotes.get("Effect"):FireClient(player, "Level", Layout.toWorld(plotIndex, Layout.GATE).Position + Vector3.new(0, 16, 0))
+		Remotes.get("Notify"):FireClient(player, "notify_rebirth_done", { string.format("%.1f", multiplier) })
 	end)
-	UnlockService.restorePlot(player, plotIndex)
-	ThemeService.applyPlot(plotIndex)
-	CustomerService.restart(player, plotIndex)
-	ShopService.restart(player, plotIndex)
-
-	local multiplier = EconomyService.multiplier(player)
-	Remotes.get("Effect"):FireClient(player, "Level", Layout.toWorld(plotIndex, Layout.GATE).Position + Vector3.new(0, 16, 0))
-	Remotes.get("Notify"):FireClient(player, "notify_rebirth_done", { string.format("%.1f", multiplier) })
 	busy[player] = nil
+	if not ok then
+		warn("[RebirthService] rebirth failed: " .. tostring(err))
+		return false, "notify_rebirth_locked"
+	end
 	return true, "notify_rebirth_done"
 end
 

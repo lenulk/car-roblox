@@ -1,6 +1,6 @@
 --!strict
--- Parts shop: shelves restock themselves (faster with a stocker), walk-in shoppers buy items,
--- and the shelf model shows how full it is (Product parts hidden above the stock).
+-- Parts shop: shelves restock themselves (faster with a stocker, who carries the items to the shelf),
+-- walk-in shoppers buy items, and the shelf model shows how full it is (Product parts hidden above the stock).
 
 local Players = game:GetService("Players")
 
@@ -19,12 +19,20 @@ local HireService = require(script.Parent.HireService)
 local EconomyService = require(script.Parent.EconomyService)
 local MapBuilder = require(script.Parent.MapBuilder)
 local ShopperService = require(script.Parent.ShopperService)
+local EmployeeService = require(script.Parent.EmployeeService)
 
 local ShopService = {}
 
 local TICK = 0.5
 
-type PlotShop = { player: Player, alive: boolean, restock: { [string]: number }, shopperTimer: number }
+-- pending: restocked items the stocker NPC still has to carry to the shelf.
+type PlotShop = {
+	player: Player,
+	alive: boolean,
+	restock: { [string]: number },
+	pending: { [string]: number },
+	shopperTimer: number,
+}
 local shops: { [number]: PlotShop } = {}
 
 local function capacity(player: Player, shelfId: string): number
@@ -111,17 +119,30 @@ local function tick(plotIndex: number, shop: PlotShop, dt: number)
 		return
 	end
 
-	-- Restock.
+	-- Restock. With a stocker NPC on the plot the items are carried over (see deliverStock).
 	local stocker = HireService.stockerLevel(player)
 	local speed = if stocker > 0 then Game.STOCKER_SPEED[stocker] or 1 else 1
+	local npc = if stocker > 0 then HireService.npcAt(plotIndex, "Stock") else nil
+	local carried = npc ~= nil and npc.Parent ~= nil
 	for _, shelfId in shelves do
 		local cap = capacity(player, shelfId)
 		local stock = data.stock[shelfId] or 0
-		if stock < cap then
+		local pending = shop.pending[shelfId] or 0
+		if pending > 0 and not carried then
+			setStock(player, shelfId, stock + pending)
+			stock = math.min(stock + pending, cap)
+			pending = 0
+			shop.pending[shelfId] = 0
+		end
+		if stock + pending < cap then
 			local t = (shop.restock[shelfId] or 0) + dt * speed
 			if t >= Shelves.RESTOCK_SECONDS then
 				t -= Shelves.RESTOCK_SECONDS
-				setStock(player, shelfId, stock + 1)
+				if carried then
+					shop.pending[shelfId] = pending + 1
+				else
+					setStock(player, shelfId, stock + 1)
+				end
 			end
 			shop.restock[shelfId] = t
 		else
@@ -153,8 +174,40 @@ local function tick(plotIndex: number, shop: PlotShop, dt: number)
 	end
 end
 
+-- Stocker NPC hooks (EmployeeService): the shelf with the most items waiting, and the hand-over.
+local function stockTarget(plotIndex: number): number?
+	local shop = shops[plotIndex]
+	if not shop or not shop.alive then
+		return nil
+	end
+	local best: string? = nil
+	local bestCount = 0
+	for _, shelfId in ownedShelves(shop.player) do
+		local count = shop.pending[shelfId] or 0
+		if count > bestCount then
+			best, bestCount = shelfId, count
+		end
+	end
+	return if best then shelfIndex(best) else nil
+end
+
+local function deliverStock(plotIndex: number, index: number)
+	local shop = shops[plotIndex]
+	local data = shop and PlayerData.get(shop.player)
+	if not shop or not shop.alive or not data then
+		return
+	end
+	for _, shelfId in Shelves.order do
+		local count = shop.pending[shelfId] or 0
+		if shelfIndex(shelfId) == index and count > 0 then
+			shop.pending[shelfId] = 0
+			setStock(shop.player, shelfId, (data.stock[shelfId] or 0) + count)
+		end
+	end
+end
+
 local function startPlot(player: Player, plotIndex: number)
-	local shop: PlotShop = { player = player, alive = true, restock = {}, shopperTimer = 5 }
+	local shop: PlotShop = { player = player, alive = true, restock = {}, pending = {}, shopperTimer = 5 }
 	shops[plotIndex] = shop
 	-- UnlockService rebuilds shelf models on join in its own callback; refresh after that settles.
 	task.delay(1.5, function()
@@ -192,6 +245,7 @@ function ShopService.restart(player: Player, plotIndex: number)
 end
 
 function ShopService.start()
+	EmployeeService.setStockHandler(stockTarget, deliverStock)
 	PlotService.onAssigned(startPlot)
 	PlotService.onReleased(function(_player, plotIndex)
 		stopPlot(plotIndex)

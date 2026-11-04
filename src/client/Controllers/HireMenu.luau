@@ -10,6 +10,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Remotes: any = require(Shared:WaitForChild("Remotes") :: ModuleScript)
 local Format: any = require(Shared:WaitForChild("Format") :: ModuleScript)
 local Employees: any = require(Shared:WaitForChild("Config"):WaitForChild("Employees") :: ModuleScript)
+local Game: any = require(Shared:WaitForChild("Config"):WaitForChild("Game") :: ModuleScript)
 local Client = (script.Parent :: Instance).Parent :: Instance
 local ClientState: any = require(Client:WaitForChild("ClientState") :: ModuleScript)
 local Theme: any = require(Client:WaitForChild("Theme") :: ModuleScript)
@@ -25,6 +26,49 @@ local ROW_HEIGHT = 92
 local MAX_LEVEL = 5
 local SKIN = Color3.fromRGB(255, 214, 170)
 local DARK_TEXT = Color3.fromRGB(60, 40, 0)
+local EFFECT_LINE = 20
+
+local function num(x: number): string
+	return string.format("%g", math.floor(x * 1000 + 0.5) / 1000)
+end
+
+local function percent(x: number): string
+	return num(x * 100) .. "%"
+end
+
+local function plusPercent(x: number): string
+	return "+" .. percent(x)
+end
+
+local function times(x: number): string
+	return "x" .. num(x)
+end
+
+type Effect = { key: string, values: { number }, format: (number) -> string }
+
+-- What each level does per role (numbers straight from Config/Game, indexed by employee level).
+local EFFECTS: { [string]: { Effect } } = {
+	mechanic = { { key = "staff_effect_repair", values = Game.MECHANIC_SPEED, format = percent } },
+	painter = { { key = "staff_effect_repair", values = Game.MECHANIC_SPEED, format = percent } },
+	cashier = { { key = "staff_effect_income", values = Game.CASHIER_BONUS, format = plusPercent } },
+	stocker = { { key = "staff_effect_restock", values = Game.STOCKER_SPEED, format = times } },
+	receptionist = {
+		{ key = "staff_effect_spawn", values = Game.RECEPTION_SPAWN_MULT, format = times },
+		{ key = "staff_effect_tip", values = Game.RECEPTION_TIP_BONUS, format = plusPercent },
+	},
+	manager = { { key = "staff_effect_manager", values = Game.MANAGER_SPEED, format = plusPercent } },
+}
+
+-- "now → next" (just "now" at max level).
+local function effectChange(effect: Effect, level: number): string
+	local values = effect.values
+	local now = values[math.clamp(level, 1, #values)]
+	local nxt = if level < MAX_LEVEL then values[level + 1] else nil
+	if nxt == nil then
+		return effect.format(now)
+	end
+	return effect.format(now) .. " → " .. effect.format(nxt)
+end
 
 -- Round character badge: colored circle, head, shoulders. `size` is the diameter in pixels.
 local function makeIcon(parent: Instance, size: number, shirt: Color3, props: { [string]: any }?): any
@@ -388,17 +432,19 @@ function HireMenu.start()
 		local cost: number? = if type(employee.upgradeCost) == "number" then employee.upgradeCost else nil
 		local definition = Employees.byId[role]
 		local shirt: Color3 = if definition then definition.shirtColor else C.gray
+		local effects: { Effect } = EFFECTS[role] or {}
+		local rowHeight = if #effects > 0 then 84 + EFFECT_LINE * #effects + 8 else ROW_HEIGHT
 
 		local row = Theme.new("Frame", {
 			Name = "Staff_" .. slot,
 			BackgroundColor3 = C.panelLight,
-			Size = UDim2.new(1, 0, 0, ROW_HEIGHT),
+			Size = UDim2.new(1, 0, 0, rowHeight),
 			LayoutOrder = index,
 		}, staffScroll)
 		Theme.corner(row, 16)
 		Theme.stroke(row, C.stroke, 1.5, 0.75)
 
-		makeIcon(row, 58, shirt, { Position = UDim2.fromOffset(14, 17) })
+		makeIcon(row, 58, shirt, { Position = UDim2.fromOffset(14, math.floor((rowHeight - 58) / 2)) })
 
 		local name = Theme.label({
 			Name = "RoleName",
@@ -430,6 +476,20 @@ function HireMenu.start()
 		end
 
 		buildPips(row, level)
+
+		for i, effect in effects do
+			local effectLabel = Theme.label({
+				Name = "Effect",
+				Position = UDim2.fromOffset(82, 84 + (i - 1) * EFFECT_LINE),
+				Size = UDim2.new(1, -240, 0, EFFECT_LINE),
+				Font = Theme.fontMedium,
+				TextColor3 = C.money,
+				TextScaled = true,
+				TextXAlignment = Enum.TextXAlignment.Left,
+			}, row)
+			Theme.fitText(effectLabel, 11, 16)
+			Localizer.bind(effectLabel, effect.key, effectChange(effect, level))
+		end
 
 		if cost ~= nil and level < MAX_LEVEL then
 			local button = Theme.button({

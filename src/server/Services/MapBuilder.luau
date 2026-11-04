@@ -1297,6 +1297,15 @@ local function buildBuilding(ctx: Ctx, static: Folder)
 	buildAnnexDoor(ctx, static)
 end
 
+local function buildStockPile(ctx: Ctx, static: Folder)
+	local p: Vector3 = Layout.STOCK.pile
+	local pile = newModel("StockPile", static)
+	ctx.P(pile, "StockPallet", V3(7, 0.5, 5), CF(p.X, FLOOR_TOP + 0.25, p.Z), RGB(150, 110, 70), { Material = Enum.Material.WoodPlanks })
+	crate(ctx, pile, p.X - 1.7, FLOOR_TOP + 0.5, p.Z, 1, 0.05)
+	crate(ctx, pile, p.X + 1.7, FLOOR_TOP + 0.5, p.Z, 1, -0.08)
+	crate(ctx, pile, p.X - 0.3, FLOOR_TOP + 3.5, p.Z + 0.2, 0.85, 0.3)
+end
+
 local function buildStatic(ctx: Ctx, plot: Model): Folder
 	local static = newFolder("Static", plot)
 	buildOutside(ctx, static)
@@ -1305,6 +1314,7 @@ local function buildStatic(ctx: Ctx, plot: Model): Folder
 	buildGate(ctx, static)
 	buildSafe(ctx, static)
 	buildHireBoard(ctx, static)
+	buildStockPile(ctx, static)
 	return static
 end
 

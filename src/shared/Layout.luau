@@ -105,8 +105,15 @@ Layout.DIAGNOSTICS_BUTTON = Vector3.new(-32, 0, 3)
 Layout.ENGINE_BUTTON = Vector3.new(16, 0, 16)
 Layout.DYNO_BUTTON = Vector3.new(30, 0, 12)
 
--- Stocker walks back and forth in front of the shelves.
-Layout.STOCK = { employee = faceOut(-44, 40), routeA = Vector3.new(-62, 0, 40), routeB = Vector3.new(-26, 0, 40) }
+-- Stocker post in front of the shelves; crates are fetched from the pile behind shelf 4 (aisle -> pickup).
+Layout.STOCK = {
+	employee = faceOut(-44, 40),
+	routeA = Vector3.new(-62, 0, 40),
+	routeB = Vector3.new(-26, 0, 40),
+	pile = Vector3.new(-15, 0, 53),
+	pickup = Vector3.new(-15, 0, 49),
+	aisle = Vector3.new(-15, 0, 40),
+}
 
 -- Mezzanine office (second floor) over the back-right of the building.
 Layout.MEZZANINE = { minX = 24, maxX = 68, minZ = 30, maxZ = 58, floorY = 12, stairsX = 65, stairsZ0 = 4, stairsZ1 = 28 }

@@ -5,8 +5,11 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 
+local SoundService = game:GetService("SoundService")
+
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Remotes: any = require(Shared:WaitForChild("Remotes") :: ModuleScript)
+local SoundFx: any = require(Shared:WaitForChild("SoundFx") :: ModuleScript)
 local Client = (script.Parent :: Instance).Parent :: Instance
 local Theme: any = require(Client:WaitForChild("Theme") :: ModuleScript)
 
@@ -464,6 +467,7 @@ function Effects.start()
 		end
 		if effect == "Unlock" then
 			unlock(position)
+			SoundFx.play(SoundService, "purchase")
 		elseif effect == "Cash" then
 			cash(position, if type(text) == "string" then text else "")
 		elseif effect == "Repair" then

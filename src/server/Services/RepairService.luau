@@ -7,6 +7,8 @@ local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
 local Remotes = require(Shared.Remotes)
 local Strings = require(Shared.Config.Strings)
 local Game = require(Shared.Config.Game)
+local CarBuilder = require(Shared.CarBuilder)
+local SoundFx = require(Shared.SoundFx)
 
 local HireService = require(script.Parent.HireService)
 local EmployeeService = require(script.Parent.EmployeeService)
@@ -66,6 +68,7 @@ local function finish(job: ActiveJob)
 	local root = job.model.PrimaryPart
 	if root then
 		Remotes.get("Effect"):FireClient(job.player, "Repair", root.Position + Vector3.new(0, 3, 0))
+		SoundFx.play(root, "repairDone")
 	end
 	task.spawn(job.onComplete)
 end
@@ -131,7 +134,8 @@ local function step(dt: number)
 				local npc = HireService.npcAt(job.plotIndex, "Bay" .. job.bayIndex)
 				if npc then
 					job.npc = npc
-					pcall(EmployeeService.setWorking, npc, true)
+					-- The painter's mist takes the color of the car being worked on (nil = uniform color).
+					pcall(EmployeeService.setWorking, npc, true, CarBuilder.bodyColor(model))
 				end
 			end
 			job.progress += dt * staffSpeed(job.player, level) / job.repairTime

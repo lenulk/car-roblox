@@ -444,6 +444,21 @@ end
 -- Public API
 ------------------------------------------------------------------------------------------------
 
+-- Paint color of a built car (its "Body" part, else any "BodyPanel"); nil when the model has neither.
+function CarBuilder.bodyColor(model: Model): Color3?
+	local fallback: Color3? = nil
+	for _, d in model:GetDescendants() do
+		if d:IsA("BasePart") then
+			if d.Name == "Body" then
+				return d.Color
+			elseif d.Name == "BodyPanel" and fallback == nil then
+				fallback = d.Color
+			end
+		end
+	end
+	return fallback
+end
+
 function CarBuilder.recolor(model: Model, color: Color3)
 	recolorParts(model, color)
 end
