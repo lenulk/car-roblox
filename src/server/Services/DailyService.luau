@@ -9,6 +9,7 @@ local Game = require(Shared.Config.Game)
 local PlayerData = require(script.Parent.PlayerData)
 local PlotService = require(script.Parent.PlotService)
 local EconomyService = require(script.Parent.EconomyService)
+local GamePassService = require(script.Parent.GamePassService)
 
 local DailyService = {}
 
@@ -25,7 +26,8 @@ local function status(player: Player, data: PlayerData.Data): (boolean, number, 
 		streak = math.max(1, data.dailyStreak)
 	end
 	streak = math.min(streak, Game.DAILY_MAX_STREAK)
-	local reward = math.floor(Game.DAILY_BASE * streak * EconomyService.multiplier(player))
+	local vipMult = if GamePassService.owns(player, "VIP") then GamePassService.field("VIP", "dailyMult", 1) else 1
+	local reward = math.floor(Game.DAILY_BASE * streak * EconomyService.multiplier(player) * vipMult)
 	return available, streak, reward
 end
 

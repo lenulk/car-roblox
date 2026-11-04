@@ -28,6 +28,7 @@ local DEFINITIONS: { [string]: string } = {
 	UpgradeCar = "RemoteFunction", -- (carId, part) -> ok, key
 	DriveCar = "RemoteFunction", -- (carId, mode?) -> ok, key   (mode: nil = connector road, "track" = private race track)
 	ReturnCar = "RemoteEvent", -- ()
+	DebugPurchase = "RemoteEvent", -- (key) Studio-only fake purchase of a product / game pass (ignored in live games)
 }
 
 local Remotes = {}

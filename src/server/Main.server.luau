@@ -12,6 +12,7 @@ local ORDER = {
 	"PlayerData",
 	"PlotService",
 	"GamePassService",
+	"PurchaseService",
 	"TrafficService",
 	"EmployeeService",
 	"ShopperService",

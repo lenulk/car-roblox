@@ -1,7 +1,8 @@
 --!strict
 -- Top-center pill: money (animated count-up) + star rating with progress bar, a multiplier badge under the
 -- money pill (hidden at x1), and on the right: the gear button (Settings) with a stack of round icon buttons
--- under it: Daily (red dot when claimable), Themes, Shop (only if a pass exists).
+-- under it: Daily (red dot when claimable), Themes, Shop (always visible).
+-- The multiplier badge shows a countdown while a Robux boost is active; tapping it opens the Shop's Boost tab.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
@@ -9,7 +10,6 @@ local TweenService = game:GetService("TweenService")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Format: any = require(Shared:WaitForChild("Format") :: ModuleScript)
 local GameConfig: any = require(Shared:WaitForChild("Config"):WaitForChild("Game") :: ModuleScript)
-local GamePasses: any = require(Shared:WaitForChild("Config"):WaitForChild("GamePasses") :: ModuleScript)
 local Client = (script.Parent :: Instance).Parent :: Instance
 local ClientState: any = require(Client:WaitForChild("ClientState") :: ModuleScript)
 local Theme: any = require(Client:WaitForChild("Theme") :: ModuleScript)
@@ -29,19 +29,10 @@ local function formatMultiplier(value: number): string
 	return "x" .. tostring(math.floor(value * 100 + 0.5) / 100)
 end
 
--- True when at least one game pass has a real id (otherwise the Shop button stays hidden).
-local function anyGamePass(): boolean
-	local order: any = GamePasses.order
-	if type(order) ~= "table" then
-		return false
-	end
-	for _, name in order do
-		local entry: any = GamePasses[name]
-		if type(entry) == "table" and type(entry.id) == "number" and entry.id ~= 0 then
-			return true
-		end
-	end
-	return false
+-- 754 -> "12:34"
+local function formatClock(seconds: number): string
+	seconds = math.max(0, math.ceil(seconds))
+	return string.format("%d:%02d", seconds // 60, seconds % 60)
 end
 
 function HUD.start()
@@ -228,12 +219,58 @@ function HUD.start()
 	end
 	local badgeLabel = Theme.label({
 		Name = "Value",
-		Size = UDim2.fromScale(1, 1),
+		Size = UDim2.new(1, 0, 0, 28),
 		TextScaled = true,
 		TextColor3 = C.star,
 	}, badgeBody)
 	Theme.fitText(badgeLabel, 12, 18)
+	-- boost countdown, under "x2"
+	local badgeTimer = Theme.label({
+		Name = "Timer",
+		Position = UDim2.fromOffset(0, 24),
+		Size = UDim2.new(1, 0, 0, 16),
+		Font = Theme.fontMedium,
+		TextScaled = true,
+		TextColor3 = C.text,
+		Visible = false,
+	}, badgeBody)
+	Theme.fitText(badgeTimer, 9, 13)
+	-- tap the badge -> Shop, Boost tab
+	local badgeButton = Theme.new("TextButton", {
+		Name = "Tap",
+		BackgroundTransparency = 1,
+		Text = "",
+		Size = UDim2.fromScale(1, 1),
+		ZIndex = 6,
+	}, badgeBody)
+	badgeButton.Activated:Connect(function()
+		Shop.open("boost")
+	end)
+
 	local lastMultiplier = 1
+	local badgeHeight = 28
+
+	local function setBadgeHeight(height: number)
+		badgeHeight = height
+		badgeContainer.Size = UDim2.fromOffset(78, height)
+	end
+
+	-- Updates the countdown from the snapshot's server clock; also sizes the badge. Cheap, runs twice a second.
+	local function updateBoostTimer()
+		local left: number = ClientState.boostRemaining()
+		if left > 0 then
+			badgeTimer.Text = formatClock(left)
+			badgeTimer.Visible = true
+			if badgeHeight ~= 44 then
+				setBadgeHeight(44)
+			end
+		else
+			badgeTimer.Visible = false
+			if badgeHeight ~= 28 then
+				setBadgeHeight(28)
+			end
+		end
+	end
 
 	local function setMultiplier(value: number)
 		local shown = math.abs(value - 1) > 0.001
@@ -243,12 +280,22 @@ function HUD.start()
 			return
 		end
 		badgeLabel.Text = formatMultiplier(value)
+		updateBoostTimer()
 		if math.abs(value - lastMultiplier) > 0.001 then
-			badgeContainer.Size = UDim2.fromOffset(94, 34)
-			Theme.tween(badgeContainer, { Size = UDim2.fromOffset(78, 28) }, 0.5, Enum.EasingStyle.Back)
+			badgeContainer.Size = UDim2.fromOffset(94, badgeHeight + 6)
+			Theme.tween(badgeContainer, { Size = UDim2.fromOffset(78, badgeHeight) }, 0.5, Enum.EasingStyle.Back)
 		end
 		lastMultiplier = value
 	end
+
+	task.spawn(function()
+		while true do
+			task.wait(0.5)
+			if badgeContainer.Visible then
+				updateBoostTimer()
+			end
+		end
+	end)
 
 	----------------------------------------------------------------- side buttons
 	local stack = Theme.new("Frame", {
@@ -329,7 +376,6 @@ function HUD.start()
 	local shopItem = makeSideButton("Shop", "🛒", "hud_shop", 3, function()
 		Shop.open()
 	end)
-	shopItem.button.Visible = anyGamePass()
 
 	-- red "claimable" dot on the Daily button, gently pulsing
 	local dailyDot = Theme.new("Frame", {

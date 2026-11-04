@@ -478,6 +478,10 @@ function Effects.start()
 			wash(position)
 		elseif effect == "Coins" then
 			coins(position, if type(text) == "string" then text else "")
+		elseif effect == "Purchase" then
+			-- Robux purchase granted (PurchaseService)
+			coins(position, if type(text) == "string" then text else "")
+			SoundFx.play(SoundService, "purchase")
 		end
 	end)
 end

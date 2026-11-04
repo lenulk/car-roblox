@@ -271,6 +271,20 @@ Diagnostics → Shelf3 → EngineBench → Office → Shelf4 → Dyno → Tuning
 
 DataStore cannot store Color3: every saved color is a hex string `"RRGGBB"`.
 
+### Robux purchases (round 1)
+
+- `Config/Products.luau`: `CashPacks`, `Boosts`, `Instant` lists, `byKey`, `byId`, `DEBUG_FAKE_IN_STUDIO`. `id = 0` = not created (hidden live; TEST tag in Studio).
+- `Config/GamePasses.luau` adds `VIP = { id = 0, dailyMult = 1.5 }` (gold head tag, daily reward x`dailyMult`).
+- Remote `DebugPurchase(key)` (RemoteEvent, client → server): Studio only, fake purchase of a product key or game pass key that runs the real grant code.
+- Effect `"Purchase"` (position, text?): coin sparkle + `purchase` sound after a Robux grant.
+- `PurchaseService` (`src/server/Services/PurchaseService.luau`) is the ONLY owner of `MarketplaceService.ProcessReceipt`.
+  `PurchaseService.registerKind(kind, handler, afterGrant?)`; handler `(player, data, entry) -> (ok, notifyKey?, args?)` runs inside `PlayerData.update`. Round-1 kinds: `cash`, `boost`, `instantRepair`.
+  Receipt flow: player loaded → known product → `data.receipts[PurchaseId]` check → grant + store receipt (newest 200 kept) → `PlayerData.saveNow` → `PurchaseGranted` (else `NotProcessedYet`).
+- `PlayerData.saveNow(player): boolean`; `RepairService.finishAll(player): number` / `activeCount(player)`; `OfflineService.estimatePerSecond(player)`; `EconomyService.multiplier(player, excludeBoost?)`; `GamePassService.debugGrant(player, key)`.
+- Data fields: `receipts: {[PurchaseId]: os.time}`, `boostUntil: number` (os.time, 0 = none).
+- Snapshot adds: `cashPacks = { CashS = n, ... }` (cached 20 s), `boostEndsAt` + `serverTime` (os.time of both; client counts down with its own clock), `repairsActive`; `multiplier` includes the boost while active; `gamepasses` also lists `VIP`.
+- Client: `Shop.open(tab?)` / `OpenUI("Shop", tab?)` with tab ∈ `"cash" | "boost" | "pass"`; tabs come from the `TABS` list in `Shop.luau`.
+
 ## 17. Cars (`src/shared/CarBuilder.luau`, v2)
 
 - `build(carTypeId, opts?)` — customer cars (as §8), now 6 types.

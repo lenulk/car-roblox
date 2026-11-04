@@ -36,6 +36,8 @@ export type Data = {
 	ownedParts: { [string]: boolean },
 	bestLaps: { [string]: number }, -- private race track: best lap seconds per carId
 	prologueDone: boolean, -- opening scene watched (or skipped)
+	receipts: { [string]: number }, -- Robux PurchaseId -> os.time() granted (newest 200 kept)
+	boostUntil: number, -- os.time() when the paid income boost ends (0 = none)
 }
 
 type Profile = {
@@ -81,6 +83,8 @@ local function defaultData(player: Player): Data
 		ownedParts = {},
 		bestLaps = {},
 		prologueDone = false,
+		receipts = {},
+		boostUntil = 0,
 	}
 end
 
@@ -116,9 +120,9 @@ local function withRetries<T>(fn: () -> T): (boolean, T | string)
 	return false, tostring(lastError)
 end
 
-local function save(player: Player, profile: Profile)
+local function save(player: Player, profile: Profile): boolean
 	if not profile.canSave or not store then
-		return
+		return false
 	end
 	profile.data.lastOnline = os.time()
 	local dataStore = store :: DataStore
@@ -128,9 +132,10 @@ local function save(player: Player, profile: Profile)
 	end)
 	if ok then
 		profile.dirty = false
-	else
-		warn(`[PlayerData] Save failed for {player.Name}: {err}`)
+		return true
 	end
+	warn(`[PlayerData] Save failed for {player.Name}: {err}`)
+	return false
 end
 
 local function buildSnapshot(player: Player, data: Data): { [string]: any }
@@ -200,6 +205,19 @@ function PlayerData.trySpend(player: Player, amount: number): boolean
 		data.money -= amount
 	end)
 	return true
+end
+
+-- Synchronous save (yields). Returns true when the data is safely stored. Studio without API access
+-- has no DataStore at all; there it returns true so purchases stay testable.
+function PlayerData.saveNow(player: Player): boolean
+	local profile = profiles[player]
+	if not profile then
+		return false
+	end
+	if not store then
+		return RunService:IsStudio()
+	end
+	return save(player, profile)
 end
 
 function PlayerData.addSnapshotField(fn: (Player, Data, { [string]: any }) -> ())

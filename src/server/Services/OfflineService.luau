@@ -16,6 +16,7 @@ local UnlockService = require(script.Parent.UnlockService)
 local HireService = require(script.Parent.HireService)
 local EconomyService = require(script.Parent.EconomyService)
 local CustomerService = require(script.Parent.CustomerService)
+local GamePassService = require(script.Parent.GamePassService)
 
 local OfflineService = {}
 
@@ -42,6 +43,9 @@ local function bayRate(player: Player, bayIndex: number, station: string, staffL
 	if manager > 0 then
 		speed *= 1 + (Game.MANAGER_SPEED[manager] or 0)
 	end
+	if GamePassService.owns(player, "FastStaff") then
+		speed *= GamePassService.value("FastStaff")
+	end
 	local jobsPerSecond = speed / (totalTime / count)
 	return (totalPay / count) * jobsPerSecond, jobsPerSecond
 end
@@ -49,7 +53,7 @@ end
 -- average items a walk-in shopper buys (ShopService.sell: math.random(1, 2))
 local ITEMS_PER_SHOPPER = 1.5
 
-local function estimatePerSecond(player: Player): number
+function OfflineService.estimatePerSecond(player: Player): number
 	-- bays: staff can't fix more cars than customers bring in (one car per spawn interval)
 	local bayPay, bayJobs = 0, 0
 	local stations, bays = UnlockService.ownedBays(player)
@@ -98,7 +102,9 @@ local function grant(player: Player)
 	if awaySeconds < 60 then
 		return
 	end
-	local amount = math.floor(estimatePerSecond(player) * awaySeconds * Game.OFFLINE_EFFICIENCY * EconomyService.multiplier(player))
+	local amount = math.floor(
+		OfflineService.estimatePerSecond(player) * awaySeconds * Game.OFFLINE_EFFICIENCY * EconomyService.multiplier(player, true)
+	)
 	if amount <= 0 then
 		return
 	end

@@ -8,6 +8,7 @@ local Remotes: any = require(Shared:WaitForChild("Remotes") :: ModuleScript)
 local Client = (script.Parent :: Instance).Parent :: Instance
 local Theme: any = require(Client:WaitForChild("Theme") :: ModuleScript)
 local Localizer: any = require((script.Parent :: Instance):WaitForChild("Localizer") :: ModuleScript)
+local Shop: any = require((script.Parent :: Instance):WaitForChild("Shop") :: ModuleScript)
 
 local Notifications = {}
 
@@ -112,6 +113,26 @@ function Notifications.start()
 			TextTransparency = 1,
 		}, toast)
 
+		local showSeconds = SHOW_SECONDS
+		if key == "notify_not_enough_money" then
+			-- "Get cash" shortcut to the Shop's Cash tab
+			Theme.list(toast, Enum.FillDirection.Vertical, 8, Enum.HorizontalAlignment.Center)
+			label.LayoutOrder = 1
+			local getCash = Theme.button({
+				Name = "GetCash",
+				Size = UDim2.fromOffset(170, 44),
+				BackgroundColor3 = Color3.fromRGB(38, 160, 78),
+				TextSize = 20,
+				LayoutOrder = 2,
+			}, toast)
+			Localizer.bind(getCash, "notify_get_cash")
+			getCash.Activated:Connect(function()
+				Shop.open("cash")
+				dismiss(wrapper)
+			end)
+			showSeconds = 5
+		end
+
 		Theme.tween(toast, { BackgroundTransparency = 0.08, Position = UDim2.fromOffset(0, 0) }, 0.3, Enum.EasingStyle.Back)
 		Theme.tween(stroke, { Transparency = 0.15 }, 0.3)
 		Theme.tween(label, { TextTransparency = 0 }, 0.3)
@@ -121,7 +142,7 @@ function Notifications.start()
 			dismiss(active[1])
 		end
 
-		task.delay(SHOW_SECONDS, function()
+		task.delay(showSeconds, function()
 			dismiss(wrapper)
 		end)
 	end

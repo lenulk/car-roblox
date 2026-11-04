@@ -10,6 +10,7 @@ local Layout = require(Shared.Layout)
 local Remotes = require(Shared.Remotes)
 local Format = require(Shared.Format)
 local Game = require(Shared.Config.Game)
+local Products = require(Shared.Config.Products)
 
 local PlayerData = require(script.Parent.PlayerData)
 local PlotService = require(script.Parent.PlotService)
@@ -17,6 +18,8 @@ local MapBuilder = require(script.Parent.MapBuilder)
 local GamePassService = require(script.Parent.GamePassService)
 
 local EconomyService = {}
+
+local BOOST_MULT: number = Products.Boosts[1] and Products.Boosts[1].mult or 2
 
 -- HireService registers the cashier's level here (0 = no cashier); avoids a require cycle.
 local cashierLevel: (Player) -> number = function()
@@ -37,13 +40,43 @@ function EconomyService.starLevel(points: number): number
 	return level
 end
 
--- DoubleMoney pass. Shown in the HUD.
-function EconomyService.multiplier(player: Player): number
+-- DoubleMoney pass × paid boost (while active). Shown in the HUD.
+-- excludeBoost: OfflineService passes true (the boost never applies to offline earnings).
+function EconomyService.multiplier(player: Player, excludeBoost: boolean?): number
 	local m = 1
 	if GamePassService.owns(player, "DoubleMoney") then
 		m *= GamePassService.value("DoubleMoney")
 	end
+	if not excludeBoost then
+		local data = PlayerData.get(player)
+		if data and os.time() < data.boostUntil then
+			m *= BOOST_MULT
+		end
+	end
 	return m
+end
+
+-- Pushes a snapshot when the player's boost runs out. Safe to call again after the boost is extended:
+-- older timers notice they are stale and do nothing.
+local boostTokens: { [Player]: number } = {}
+
+function EconomyService.scheduleBoostExpiry(player: Player)
+	local data = PlayerData.get(player)
+	if not data then
+		return
+	end
+	local token = (boostTokens[player] or 0) + 1
+	boostTokens[player] = token
+	local remaining = data.boostUntil - os.time()
+	if remaining <= 0 then
+		return
+	end
+	task.delay(remaining + 0.5, function()
+		if boostTokens[player] ~= token or not player.Parent then
+			return
+		end
+		PlayerData.push(player)
+	end)
 end
 
 local function safeLabel(plotIndex: number): TextLabel?
@@ -182,6 +215,13 @@ function EconomyService.start()
 		refreshSafeLabel(plotIndex, 0)
 	end
 
+	PlayerData.onLoaded(function(player)
+		EconomyService.scheduleBoostExpiry(player)
+	end)
+	Players.PlayerRemoving:Connect(function(player)
+		boostTokens[player] = nil
+	end)
+
 	PlotService.onAssigned(function(player, plotIndex)
 		local data = PlayerData.get(player)
 		refreshSafeLabel(plotIndex, if data then data.safe else 0)
@@ -196,6 +236,8 @@ function EconomyService.start()
 		snapshot.starLevel = level
 		snapshot.nextStarAt = Game.STAR_THRESHOLDS[level + 1]
 		snapshot.multiplier = EconomyService.multiplier(player)
+		snapshot.boostEndsAt = data.boostUntil
+		snapshot.serverTime = os.time()
 		local money, stars = leaderstats(player)
 		if money then
 			money.Value = math.clamp(math.floor(data.money), 0, 2 ^ 31 - 1)

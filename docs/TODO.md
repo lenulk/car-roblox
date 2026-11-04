@@ -57,6 +57,7 @@
 - ⬜ ใส่ ID เพลงใน `Config/Game.luau` → `MUSIC_SOUND_ID` (ถ้าต้องการเพลง)
 - ⬜ สร้าง Game Pass บน Creator Dashboard แล้วใส่ ID ใน `Config/GamePasses.luau` (0 = ปิด)
 - ⬜ ตั้ง Max Players = 4 และเปิด Studio Access to API Services
+- ⬜ Create Developer Products CashS/M/L/XL, Boost2x, InstantRepair and Game Pass VIP on Creator Hub; paste ids into `Config/Products.luau` and `Config/GamePasses.luau` (0 = hidden in live games; shown with a TEST tag in Studio while `DEBUG_FAKE_IN_STUDIO = true`; set it to `false` before release)
 
 ## 8.5 บัค/คำขอจากผู้ใช้ (รอแก้)
 - ✅ **ซื้อ/ปลด service (สถานี/เครื่องมือ)** — ผู้ใช้สงสัยว่าเป็นบัค

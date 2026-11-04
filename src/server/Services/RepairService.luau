@@ -10,6 +10,7 @@ local Game = require(Shared.Config.Game)
 local CarBuilder = require(Shared.CarBuilder)
 local SoundFx = require(Shared.SoundFx)
 
+local PlayerData = require(script.Parent.PlayerData)
 local HireService = require(script.Parent.HireService)
 local EmployeeService = require(script.Parent.EmployeeService)
 local GamePassService = require(script.Parent.GamePassService)
@@ -62,6 +63,7 @@ local function finish(job: ActiveJob)
 	end
 	job.done = true
 	active[job.model] = nil
+	PlayerData.push(job.player)
 	stopNpc(job)
 	job.prompt:Destroy()
 	job.model:SetAttribute("RepairProgress", 1)
@@ -100,6 +102,7 @@ function RepairService.attach(job: Job)
 	activeJob.lastAttr = 0
 	active[job.model] = activeJob
 	job.model:SetAttribute("RepairProgress", 0)
+	PlayerData.push(job.player)
 
 	prompt.Triggered:Connect(function(player)
 		if player == job.player then
@@ -114,9 +117,36 @@ function RepairService.detach(model: Model)
 	if job then
 		job.done = true
 		active[model] = nil
+		PlayerData.push(job.player)
 		stopNpc(job)
 		job.prompt:Destroy()
 	end
+end
+
+-- Number of repairs in progress for a player.
+function RepairService.activeCount(player: Player): number
+	local count = 0
+	for _, job in active do
+		if job.player == player and not job.done then
+			count += 1
+		end
+	end
+	return count
+end
+
+-- Completes every active job of the player through the normal finish path (pay, stars, effects).
+-- Returns how many were finished.
+function RepairService.finishAll(player: Player): number
+	local jobs: { ActiveJob } = {}
+	for _, job in active do
+		if job.player == player and not job.done then
+			table.insert(jobs, job)
+		end
+	end
+	for _, job in jobs do
+		finish(job)
+	end
+	return #jobs
 end
 
 local function step(dt: number)
@@ -156,6 +186,9 @@ local function step(dt: number)
 end
 
 function RepairService.start()
+	PlayerData.addSnapshotField(function(player, _data, snapshot)
+		snapshot.repairsActive = RepairService.activeCount(player)
+	end)
 	RunService.Heartbeat:Connect(step)
 end
 
