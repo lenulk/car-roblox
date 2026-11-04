@@ -1,7 +1,7 @@
 --!strict
 -- Top-center pill: money (animated count-up) + star rating with progress bar, a multiplier badge under the
 -- money pill (hidden at x1), and on the right: the gear button (Settings) with a stack of round icon buttons
--- under it: Daily (red dot when claimable), Themes, Rebirth (glows when possible), Shop (only if a pass exists).
+-- under it: Daily (red dot when claimable), Themes, Shop (only if a pass exists).
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
@@ -18,7 +18,6 @@ local Localizer: any = require(Controllers:WaitForChild("Localizer") :: ModuleSc
 local Settings: any = require(Controllers:WaitForChild("Settings") :: ModuleScript)
 local Daily: any = require(Controllers:WaitForChild("Daily") :: ModuleScript)
 local Themes: any = require(Controllers:WaitForChild("Themes") :: ModuleScript)
-local Rebirth: any = require(Controllers:WaitForChild("Rebirth") :: ModuleScript)
 local Shop: any = require(Controllers:WaitForChild("Shop") :: ModuleScript)
 
 local HUD = {}
@@ -327,10 +326,7 @@ function HUD.start()
 	local themesItem = makeSideButton("Themes", "🎨", "hud_themes", 2, function()
 		Themes.open()
 	end)
-	local rebirthItem = makeSideButton("Rebirth", "♻️", "hud_rebirth", 3, function()
-		Rebirth.open()
-	end)
-	local shopItem = makeSideButton("Shop", "🛒", "hud_shop", 4, function()
+	local shopItem = makeSideButton("Shop", "🛒", "hud_shop", 3, function()
 		Shop.open()
 	end)
 	shopItem.button.Visible = anyGamePass()
@@ -350,38 +346,6 @@ function HUD.start()
 	local dotScale = Instance.new("UIScale")
 	dotScale.Parent = dailyDot
 	TweenService:Create(dotScale, TweenInfo.new(0.7, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), { Scale = 1.25 }):Play()
-
-	-- Rebirth glow while a rebirth is possible
-	local rebirthGlow: Tween? = nil
-	local glowing = false
-	local function setRebirthGlow(on: boolean)
-		if on == glowing then
-			return
-		end
-		glowing = on
-		if rebirthGlow then
-			rebirthGlow:Cancel()
-			rebirthGlow = nil
-		end
-		if on then
-			rebirthItem.circle.BackgroundColor3 = Color3.fromRGB(86, 66, 20)
-			rebirthItem.stroke.Color = C.star
-			rebirthItem.stroke.Thickness = 2.5
-			rebirthItem.stroke.Transparency = 0
-			local tween = TweenService:Create(
-				rebirthItem.stroke,
-				TweenInfo.new(0.8, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
-				{ Thickness = 6, Transparency = 0.5 }
-			)
-			rebirthGlow = tween
-			tween:Play()
-		else
-			rebirthItem.circle.BackgroundColor3 = C.panel
-			rebirthItem.stroke.Color = C.stroke
-			rebirthItem.stroke.Thickness = 1.5
-			rebirthItem.stroke.Transparency = 0.6
-		end
-	end
 
 	-- phones: a smaller stack
 	Theme.onViewport(function()
@@ -407,8 +371,6 @@ function HUD.start()
 		setMultiplier(if type(snapshot.multiplier) == "number" then snapshot.multiplier else 1)
 		local daily: any = snapshot.daily
 		dailyDot.Visible = type(daily) == "table" and daily.available == true
-		local rebirth: any = snapshot.rebirth
-		setRebirthGlow(type(rebirth) == "table" and rebirth.canRebirth == true)
 	end)
 end
 

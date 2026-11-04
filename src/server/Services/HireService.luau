@@ -128,7 +128,7 @@ end
 
 local function spawnNpc(plotIndex: number, employee: PlayerData.Employee)
 	local ok, model = pcall(EmployeeService.spawn, plotIndex, employee.role, employee.slot, employee.level)
-	-- spawn yields: the plot may have been cleared (leave/rebirth) meanwhile, so re-read the table
+	-- spawn yields: the plot may have been cleared (player left) meanwhile, so re-read the table
 	-- and skip models EmployeeService already destroyed
 	if ok and model and model.Parent ~= nil then
 		npcs[plotIndex] = npcs[plotIndex] or {}

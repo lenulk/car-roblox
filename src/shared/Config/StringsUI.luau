@@ -42,19 +42,6 @@ return {
 		-- offline earnings
 		offline_title = "ยินดีต้อนรับกลับมา!",
 		offline_line = "พนักงานของคุณหาเงินให้ระหว่างที่คุณไม่อยู่",
-		-- rebirth
-		rebirth_title = "เกิดใหม่",
-		rebirth_desc = "เริ่มอู่ใหม่เพื่อรับตัวคูณรายได้ถาวรที่สูงขึ้น!",
-		rebirth_current = "ตอนนี้",
-		rebirth_next = "หลังเกิดใหม่",
-		rebirth_req = "เงื่อนไข: ซื้อของในอู่ให้ครบทุกชิ้น",
-		rebirth_progress = "ซื้อแล้ว %s / %s ชิ้น",
-		rebirth_count = "เกิดใหม่มาแล้ว %s ครั้ง",
-		rebirth_locked_hint = "ซื้อของให้ครบก่อนถึงจะเกิดใหม่ได้",
-		rebirth_button = "เกิดใหม่!",
-		rebirth_confirm_title = "แน่ใจไหม?",
-		rebirth_confirm_text = "อู่ของคุณจะเริ่มใหม่ แต่รถ ธีม และอะไหล่ของคุณยังอยู่ครบ",
-		rebirth_yes = "ใช่ เกิดใหม่เลย",
 		-- themes
 		themes_title = "ธีมอู่",
 		themes_your_color = "ใช้สีประจำอู่ของคุณ",
@@ -73,7 +60,6 @@ return {
 		-- HUD side buttons
 		hud_daily = "รายวัน",
 		hud_themes = "ธีม",
-		hud_rebirth = "เกิดใหม่",
 		hud_shop = "ร้านค้า",
 		-- drive HUD (used by DriveHUD)
 		drive_return = "กลับ",
@@ -122,19 +108,6 @@ return {
 		-- offline earnings
 		offline_title = "Welcome back!",
 		offline_line = "Your staff earned this while you were away",
-		-- rebirth
-		rebirth_title = "Rebirth",
-		rebirth_desc = "Restart your garage for a permanently bigger income multiplier!",
-		rebirth_current = "Now",
-		rebirth_next = "After rebirth",
-		rebirth_req = "Requirement: buy everything in your garage",
-		rebirth_progress = "%s / %s bought",
-		rebirth_count = "Rebirths so far: %s",
-		rebirth_locked_hint = "Buy everything first to unlock rebirth",
-		rebirth_button = "Rebirth!",
-		rebirth_confirm_title = "Are you sure?",
-		rebirth_confirm_text = "Your garage restarts, but your cars, themes and parts stay.",
-		rebirth_yes = "Yes, rebirth",
 		-- themes
 		themes_title = "Garage themes",
 		themes_your_color = "Uses your own garage color",
@@ -153,7 +126,6 @@ return {
 		-- HUD side buttons
 		hud_daily = "Daily",
 		hud_themes = "Themes",
-		hud_rebirth = "Rebirth",
 		hud_shop = "Shop",
 		-- drive HUD (used by DriveHUD)
 		drive_return = "Return",

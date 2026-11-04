@@ -20,7 +20,6 @@ return {
 	OFFLINE_EFFICIENCY = 0.4, -- fraction of normal income earned while offline
 	DAILY_BASE = 500, -- daily reward on day 1 of the streak
 	DAILY_MAX_STREAK = 7, -- streak length at which the daily reward stops growing
-	REBIRTH_BONUS = 0.5, -- income multiplier added per rebirth
 	DAY_LENGTH_MINUTES = 20, -- length of one in-game day/night cycle
 	MUSIC_SOUND_ID = "", -- paste a Roblox audio asset id like "rbxassetid://123" here
 	VIP_STAR_POINTS = 3, -- star points granted by a VIP customer

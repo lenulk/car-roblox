@@ -199,10 +199,10 @@ UI must work on phones: big touch targets (min 44 px), `UIScale` by viewport siz
 ## 13. Remotes v2 (`src/shared/Remotes.luau`)
 
 Server → client: `DataChanged(snapshot)`, `Notify(key, args?)`, `OpenUI(uiName, arg?)`, `Effect(effect, position, text?)`.
-uiName ∈ `"Hire" | "Upgrade"(arg = unlockId) | "Tuning" | "Daily" | "Offline"(arg = amount) | "Themes" | "Rebirth" | "Shop"`.
+uiName ∈ `"Hire" | "Upgrade"(arg = unlockId) | "Tuning" | "Daily" | "Offline"(arg = amount) | "Themes" | "Shop"`.
 effect ∈ `"Unlock" | "Cash" | "Repair" | "Level" | "Wash" | "Coins"` (`Coins` and `Cash` use `text`).
 Client → server (RemoteFunctions return `(ok: boolean, messageKey: string)`; the server also sends a Notify toast, so the client must not):
-`HireEmployee(role)`, `UpgradeEmployee(slot)`, `Upgrade(unlockId)`, `ClaimDaily()`, `Rebirth()`, `BuyTheme(themeId)`,
+`HireEmployee(role)`, `UpgradeEmployee(slot)`, `Upgrade(unlockId)`, `ClaimDaily()`, `BuyTheme(themeId)`,
 `BuyCar(carId)`, `SelectCar(carId)`, `Customize(carId, category, optionId)`, `UpgradeCar(carId, part)`, `DriveCar(carId, mode?)` (`mode` = nil: connector road; `"track"`: private race track, needs the `RaceTrack` unlock; the car gets attribute
 `OnTrack = true`, and `RaceTrackService` publishes `LapStart`, `NextCheckpoint`, `CheckpointCount`, `LastLap`, `BestLap`, `LapCount` as attributes on the car model);
 RemoteEvents: `RequestSnapshot()`, `SetSetting(key, value)`, `ReturnCar()`.
@@ -218,7 +218,6 @@ upgradeInfo = { [unlockId] = {
 } },
 employees = { { role, level, slot, upgradeCost = 500 } },   -- upgradeCost nil at max (5)
 stock = { Shelf1 = { stock = 7, capacity = 10, price = 40 } },
-rebirth = { count = 0, multiplier = 1, canRebirth = false, nextMultiplier = 1.5 },
 daily = { available = true, streak = 1, reward = 500 },
 themes = { current = "Classic", owned = { Classic = true } },
 cars = { Sedan = { custom = {...}, upgrades = { engine = 1, gearbox = 1, suspension = 1, brakes = 1, tires = 1 } } },
@@ -226,7 +225,7 @@ carStats = { Sedan = { maxSpeed = 70, accel = 1, handling = 1, braking = 1, grip
 selectedCar = "Sedan",                                       -- nil until the tuning room is bought
 ownedParts = { ["wheel:Turbo"] = true },                      -- "<category>:<optionId>"
 gamepasses = { DoubleMoney = false, AutoCollect = false, FastStaff = false },
-multiplier = 1,                                              -- total income multiplier (rebirth × pass)
+multiplier = 1,                                              -- total income multiplier (DoubleMoney pass)
 driving = false,
 ```
 
@@ -265,7 +264,7 @@ Diagnostics → Shelf3 → EngineBench → Office → Shelf4 → Dyno → Tuning
   Categories: paint, material, wheel, rim, caliper, spoiler, kit, hood, tint, neon, headlight, flames, smoke, decal. Color option ids are hex `"RRGGBB"`.
 - **Themes** entries `{ id, price, accent: Color3?, wall, floor, roof, stripe: Color3?, uniform: Color3 }` (accent nil = plot's own color).
 - **GamePasses** `{ DoubleMoney = { id = 0, value = 2 }, AutoCollect = { id = 0 }, FastStaff = { id = 0, value = 1.25 } }` (id 0 = disabled, hidden in UI).
-- **Game** adds `OFFLINE_MAX_MINUTES, OFFLINE_EFFICIENCY, DAILY_BASE, DAILY_MAX_STREAK, REBIRTH_BONUS, DAY_LENGTH_MINUTES, MUSIC_SOUND_ID,
+- **Game** adds `OFFLINE_MAX_MINUTES, OFFLINE_EFFICIENCY, DAILY_BASE, DAILY_MAX_STREAK, DAY_LENGTH_MINUTES, MUSIC_SOUND_ID,
   CASHIER_BONUS, STOCKER_SPEED, RECEPTION_SPAWN_MULT, RECEPTION_TIP_BONUS, MANAGER_SPEED` (5-entry tables by level).
 - **Strings**: core keys in `Strings.luau`; extra key tables in `StringsUI.luau` and `StringsTuning.luau` (`return { th = {...}, en = {...} }`)
   are merged by `Strings.luau` at load. Each UI agent owns its own extra file.
@@ -303,6 +302,6 @@ DataStore cannot store Color3: every saved color is a hex string `"RRGGBB"`.
 
 ## 20. Client v2 controllers
 
-`Tuning` (personal car room UI + 3D preview), `Upgrade`, `HireMenu` (tabs: hire / my staff with upgrade), `Daily`, `Offline`, `Rebirth`,
-`Themes`, `Shop`, `HUD` (adds multiplier badge and side buttons: Daily, Themes, Rebirth, Shop), `Music`, `DriveHUD` (speedometer + Return),
+`Tuning` (personal car room UI + 3D preview), `Upgrade`, `HireMenu` (tabs: hire / my staff with upgrade), `Daily`, `Offline`,
+`Themes`, `Shop`, `HUD` (adds multiplier badge and side buttons: Daily, Themes, Shop), `Music`, `DriveHUD` (speedometer + Return),
 `Effects` (adds Level/Wash/Coins). Strings for UI-only text go in the controller owner's extra Strings file (§16).

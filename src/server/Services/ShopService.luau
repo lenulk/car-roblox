@@ -239,11 +239,6 @@ local function stopPlot(plotIndex: number)
 	pcall(ShopperService.clearPlot, plotIndex)
 end
 
-function ShopService.restart(player: Player, plotIndex: number)
-	stopPlot(plotIndex)
-	startPlot(player, plotIndex)
-end
-
 function ShopService.start()
 	EmployeeService.setStockHandler(stockTarget, deliverStock)
 	PlotService.onAssigned(startPlot)

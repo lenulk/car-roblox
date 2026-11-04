@@ -19,9 +19,9 @@ local list = {
 	{ id = "EngineBench", price = 55000, kind = "Addon", station = "engine" },
 	{ id = "Dyno", price = 120000, kind = "Addon", station = "dyno" },
 	{ id = "TuningRoom", price = 10000, kind = "TuningRoom", anytime = true },
-	-- `requires`: its price pad only shows once that unlock is owned. `keepOnRebirth`: survives a rebirth and
-	-- is never part of the guide suggestion or the rebirth condition.
-	{ id = "RaceTrack", price = 150000, kind = "RaceTrack", anytime = true, requires = "TuningRoom", keepOnRebirth = true },
+	-- `requires`: its price pad only shows once that unlock is owned. `personal`: an optional extra (like the
+	-- cars), never suggested by the guide arrow.
+	{ id = "RaceTrack", price = 150000, kind = "RaceTrack", anytime = true, requires = "TuningRoom", personal = true },
 }
 local byId = {}
 for _, entry in list do

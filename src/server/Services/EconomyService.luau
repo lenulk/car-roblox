@@ -1,7 +1,7 @@
 --!strict
 -- Where earned money goes: into the plot's safe (walk over the pad to collect) or, with a cashier
 -- or the AutoCollect pass, straight into the wallet. Applies the income multiplier
--- (rebirths × DoubleMoney pass × cashier bonus). Owns star points and the player-list leaderstats.
+-- (DoubleMoney pass × cashier bonus). Owns star points and the player-list leaderstats.
 
 local Players = game:GetService("Players")
 
@@ -37,11 +37,9 @@ function EconomyService.starLevel(points: number): number
 	return level
 end
 
--- Rebirth bonus × DoubleMoney pass. Shown in the HUD.
+-- DoubleMoney pass. Shown in the HUD.
 function EconomyService.multiplier(player: Player): number
-	local data = PlayerData.get(player)
-	local rebirths = if data then data.rebirths else 0
-	local m = 1 + rebirths * Game.REBIRTH_BONUS
+	local m = 1
 	if GamePassService.owns(player, "DoubleMoney") then
 		m *= GamePassService.value("DoubleMoney")
 	end

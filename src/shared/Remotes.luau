@@ -21,7 +21,6 @@ local DEFINITIONS: { [string]: string } = {
 	UpgradeEmployee = "RemoteFunction", -- (slot) -> ok, key
 	Upgrade = "RemoteFunction", -- (unlockId) -> ok, key
 	ClaimDaily = "RemoteFunction", -- () -> ok, key
-	Rebirth = "RemoteFunction", -- () -> ok, key
 	BuyTheme = "RemoteFunction", -- (themeId) -> ok, key   (buys if needed, then applies)
 	BuyCar = "RemoteFunction", -- (carId) -> ok, key
 	SelectCar = "RemoteFunction", -- (carId) -> ok, key

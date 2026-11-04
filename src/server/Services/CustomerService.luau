@@ -387,7 +387,7 @@ local function startPlot(player: Player, plotIndex: number)
 	task.spawn(function()
 		task.wait(2)
 		while state.alive do
-			-- one failed spawn must not end the loop (the plot would get no customers until rebirth)
+			-- one failed spawn must not end the loop (the plot would get no customers until rejoin)
 			local ok, err = pcall(spawnCustomer, plotIndex, state)
 			if not ok then
 				warn("[CustomerService] spawnCustomer failed: " .. tostring(err))
@@ -409,12 +409,6 @@ local function stopPlot(plotIndex: number)
 	end
 	foamUsers[plotIndex] = 0
 	setFoam(plotIndex, 0)
-end
-
--- Restarts customers for a plot (used after a rebirth resets the garage).
-function CustomerService.restart(player: Player, plotIndex: number)
-	stopPlot(plotIndex)
-	startPlot(player, plotIndex)
 end
 
 function CustomerService.init()

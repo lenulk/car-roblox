@@ -20,13 +20,13 @@
 ## 3. ระบบฝั่ง server (Opus)
 - ✅ PlayerData v2 (ข้อมูลใหม่ทั้งหมด, เซฟเก่าใช้ต่อได้)
 - ✅ UnlockService v2 (อัปเกรด Lv1–5 สลับโมเดล, ปุ่มอัปเกรด, ประตูห้องแต่งรถ)
-- ✅ EconomyService v2 (ตัวคูณ Rebirth/Game Pass, โบนัสแคชเชียร์, leaderstats)
+- ✅ EconomyService v2 (ตัวคูณ Game Pass, โบนัสแคชเชียร์, leaderstats)
 - ✅ HireService v2 (6 ตำแหน่ง, อัปเกรดพนักงาน, คนแรกฟรี)
 - ✅ RepairService v2 (ผู้จัดการเร่งความเร็ว, Game Pass พนักงานเร็ว)
 - ✅ CustomerService v2 (รถ 6 รุ่นปลดตามดาว, ลูกค้า VIP, เครื่องล้างรถ + ฟอง + โบนัส)
 - ✅ ShopService (ร้านอะไหล่, เติมสต็อกเอง, ลูกค้าเดินซื้อ, ของบนชั้นลดลงตามสต็อก)
 - ✅ ThemeService (4 ธีม เปลี่ยนสีทั้งอู่ + ยูนิฟอร์ม)
-- ✅ GamePassService, OfflineService, DailyService, RebirthService, LightingService (กลางวัน-กลางคืน)
+- ✅ GamePassService, OfflineService, DailyService, LightingService (กลางวัน-กลางคืน)
 - ✅ PersonalCarService (ซื้อ/เลือก/แต่ง/อัปเกรด/ขับรถส่วนตัว)
 - ✅ `Main.server.luau` ลำดับเปิดระบบใหม่
 
@@ -43,7 +43,7 @@
 
 ## 6. UI ฝั่งผู้เล่น
 - ✅ Tuning (ห้องแต่งรถ + พรีวิว 3D หมุนได้ + ซื้อรถ + อัปเกรดสมรรถนะ + ปุ่ม DRIVE)
-- ✅ Upgrade, HireMenu (แท็บจ้าง/อัปเกรดพนักงาน), Daily, Offline, Rebirth, Themes, Shop, HUD v2, Music, Effects v2, ป้าย VIP
+- ✅ Upgrade, HireMenu (แท็บจ้าง/อัปเกรดพนักงาน), Daily, Offline, Themes, Shop, HUD v2, Music, Effects v2, ป้าย VIP
 
 ## 7. งานที่ Opus ต้องทำหลัง subagent เสร็จ
 - ✅ ตรวจโค้ดทุกไฟล์ (ชื่อ, attribute, ฟิลด์ snapshot, Remote, require ไม่วน)

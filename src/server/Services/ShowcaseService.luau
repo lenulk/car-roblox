@@ -1,6 +1,6 @@
 --!strict
 -- Showcase car: the player's selected car (with installed parts) stands on the Tuning room turntable.
--- Built once per change of selectedCar/custom; removed while driving, after rebirth, and when the plot is released.
+-- Built once per change of selectedCar/custom; removed while driving and when the plot is released.
 -- The client rotates it (Controllers/Showcase.luau).
 
 local Players = game:GetService("Players")

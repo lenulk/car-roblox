@@ -121,7 +121,7 @@ function UnlockService.nextUnlock(player: Player): any?
 	end
 	local fallback: any = nil
 	for _, entry in Unlocks.list do
-		if not data.unlocks[entry.id] and not (entry :: any).keepOnRebirth then
+		if not data.unlocks[entry.id] and not (entry :: any).personal then
 			if not (entry :: any).anytime then
 				return entry
 			end
@@ -129,10 +129,6 @@ function UnlockService.nextUnlock(player: Player): any?
 		end
 	end
 	return fallback
-end
-
-function UnlockService.allOwned(player: Player): boolean
-	return PlayerData.get(player) ~= nil and UnlockService.nextUnlock(player) == nil
 end
 
 function UnlockService.queueCapacity(player: Player): number
@@ -467,7 +463,7 @@ local function setPromptOwner(plotIndex: number, userId: number)
 	end
 end
 
--- Shows everything the player owns (at the right levels). Used on join and after a rebirth.
+-- Shows everything the player owns (at the right levels). Used on join.
 function UnlockService.restorePlot(player: Player, plotIndex: number)
 	local data = PlayerData.get(player)
 	if not data then
