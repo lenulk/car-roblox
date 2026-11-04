@@ -373,6 +373,11 @@ local function nearPlot(pos: Vector3): boolean
 		if math.abs(l.X) < 84 and l.Z > -132 and l.Z < 112 then
 			return true
 		end
+		-- the private race track behind the plot (built even before it is bought)
+		local b = Layout.TRACK.bounds
+		if l.X > b.minX - 8 and l.X < b.maxX + 8 and l.Z > b.minZ - 8 and l.Z < b.maxZ + 8 then
+			return true
+		end
 	end
 	return false
 end
@@ -1907,15 +1912,64 @@ local function buildTuningRoom(ctx: Ctx, parent: Folder): Model
 	-- walls (the front wall is the garage's back wall)
 	ctx.R(model, "AnnexWall", V3(1, wallH, d), CF(A.minX + 0.5, FLOOR_TOP + wallH / 2, cz), C_WALL, "Wall")
 	ctx.R(model, "AnnexWall", V3(1, wallH, d), CF(A.maxX - 0.5, FLOOR_TOP + wallH / 2, cz), C_WALL, "Wall")
-	ctx.R(model, "AnnexWall", V3(w, wallH, 1), CF(cx, FLOOR_TOP + wallH / 2, A.maxZ - 0.5), C_WALL, "Wall")
+	-- back wall: two pieces plus a lintel leave the doorway to the race track (closed by the TrackDoor)
+	local door = Layout.TRACK.door
+	local sideW = (w - door.halfWidth * 2) / 2
+	local doorTop = 11.6
+	for _, sx in { -1, 1 } do
+		ctx.R(
+			model,
+			"AnnexWall",
+			V3(sideW, wallH, 1),
+			CF(sx * (door.halfWidth + sideW / 2), FLOOR_TOP + wallH / 2, A.maxZ - 0.5),
+			C_WALL,
+			"Wall"
+		)
+		ctx.T(model, "TrackDoorJamb", V3(0.6, doorTop - FLOOR_TOP, 1.4), CF(sx * (door.halfWidth + 0.3), (doorTop + FLOOR_TOP) / 2, A.maxZ - 0.5))
+	end
+	ctx.R(
+		model,
+		"AnnexWall",
+		V3(door.halfWidth * 2, h - doorTop, 1),
+		CF(0, (h + doorTop) / 2, A.maxZ - 0.5),
+		C_WALL,
+		"Wall"
+	)
+	local trackDoor = newModel("TrackDoor", model)
+	local doorBack = ctx.P(
+		trackDoor,
+		"TrackDoorBacking",
+		V3(door.halfWidth * 2, doorTop - FLOOR_TOP, 0.4),
+		CF(0, (doorTop + FLOOR_TOP) / 2, A.maxZ - 0.5),
+		RGB(50, 54, 62)
+	)
+	trackDoor.PrimaryPart = doorBack
+	for k = 0, 10 do
+		for _, dz in { -0.35, 0.35 } do
+			ctx.P(
+				trackDoor,
+				"TrackDoorSlat",
+				V3(door.halfWidth * 2 - 0.4, 0.9, 0.3),
+				CF(0, FLOOR_TOP + 0.5 + k * 1.05, A.maxZ - 0.5 + dz),
+				RGB(176, 182, 192),
+				{ Material = METAL, Reflectance = 0.15 }
+			)
+		end
+	end
+	ctx.P(trackDoor, "TrackDoorHazard", V3(door.halfWidth * 2 - 0.4, 0.3, 0.1), CF(0, doorTop - 0.4, A.maxZ - 0.5 - 0.3), C_YELLOW, DECAL)
 	local innerBack = A.maxZ - 1
 	for _, sx in { -1, 1 } do
 		local ix = sx * (A.maxX - 1)
 		ctx.R(model, "AnnexStripe", V3(0.2, 3, d), CF(ix - sx * 0.1, 4, cz), ctx.accent, "Stripe")
 		ctx.A(model, "AnnexStripeNeon", V3(0.25, 0.3, d), CF(ix - sx * 0.125, 5.9, cz))
 	end
-	ctx.R(model, "AnnexStripe", V3(w - 2, 3, 0.2), CF(cx, 4, innerBack - 0.1), ctx.accent, "Stripe")
-	ctx.A(model, "AnnexStripeNeon", V3(w - 2, 0.3, 0.25), CF(cx, 5.9, innerBack - 0.125))
+	-- back stripe, split around the doorway (also keeps the opening free to walk through)
+	local stripeW = (w - 2) / 2 - door.halfWidth - 0.6
+	for _, sx in { -1, 1 } do
+		local sxCenter = sx * (door.halfWidth + 0.6 + stripeW / 2)
+		ctx.R(model, "AnnexStripe", V3(stripeW, 3, 0.2), CF(sxCenter, 4, innerBack - 0.1), ctx.accent, "Stripe")
+		ctx.A(model, "AnnexStripeNeon", V3(stripeW, 0.3, 0.25), CF(sxCenter, 5.9, innerBack - 0.125))
+	end
 
 	-- roof with two skylights
 	local roofY = h + 0.4
@@ -1961,17 +2015,20 @@ local function buildTuningRoom(ctx: Ctx, parent: Folder): Model
 
 	-- terminal, posters, rim rack, tool wall
 	buildTerminal(ctx, model)
-	buildPoster(ctx, model, -16, "rim", innerBack)
-	buildPoster(ctx, model, 0, "text", innerBack)
+	-- posters stay clear of the doorway (X -8..8)
+	buildPoster(ctx, model, -23, "rim", innerBack)
+	buildPoster(ctx, model, -14, "text", innerBack)
 	buildPoster(ctx, model, 16, "rim", innerBack)
 	buildRimRack(ctx, model, A.minX + 1)
 	buildToolWall(ctx, model, A.maxX - 1)
 
 	-- exterior TUNING signs (back wall faces +Z, side walls face outward)
-	local back = ctx.P(model, "AnnexSignBack", V3(18, 4, 0.5), CF(cx, 11, A.maxZ + 0.25), C_DARKER)
+	-- (raised above the doorway to the race track, which is 11.6 high)
+	local signY = 14.3
+	local back = ctx.P(model, "AnnexSignBack", V3(18, 2.8, 0.5), CF(cx, signY, A.maxZ + 0.25), C_DARKER)
 	addSignText(back, "SignGui", "Text", "TUNING", nil, 40, Enum.NormalId.Back)
-	for _, dy in { -2.2, 2.2 } do
-		local n = ctx.A(model, "AnnexSignNeon", V3(18.6, 0.25, 0.3), CF(cx, 11 + dy, A.maxZ + 0.3))
+	for _, dy in { -1.5, 1.5 } do
+		local n = ctx.A(model, "AnnexSignNeon", V3(18.6, 0.2, 0.3), CF(cx, signY + dy, A.maxZ + 0.3))
 		if dy > 0 then
 			addPointLight(n, ctx.accent, 26, 1, true)
 		end
@@ -1982,6 +2039,118 @@ local function buildTuningRoom(ctx: Ctx, parent: Folder): Model
 		for _, dy in { -2.2, 2.2 } do
 			ctx.A(model, "AnnexSignNeon", V3(0.3, 0.25, 14.6), CF(sx * (A.maxX + 0.3), 11 + dy, cz))
 		end
+	end
+	return model
+end
+
+------------------------------------------------------------------------------------------------
+-- Private race track (behind the Tuning annex). Around 330 Parts: no unions, no meshes.
+------------------------------------------------------------------------------------------------
+
+local C_TRACK = RGB(46, 48, 54)
+local C_CURB_RED = RGB(214, 40, 44)
+
+local function buildRaceTrack(ctx: Ctx, parent: Folder): Model
+	local T = Layout.TRACK
+	local model = newModel("RaceTrack", parent)
+	local path: { Vector3 } = T.path
+	local count = #path
+	local half = T.width / 2
+	local roadTop = 0.1
+
+	local function dirAt(i: number): Vector3
+		local a = path[(i - 2) % count + 1]
+		local b = path[i % count + 1]
+		return (b - a).Unit
+	end
+
+	-- road, curbs on the bends, edge lines on the straights
+	for i = 1, count do
+		local p = path[i]
+		local q = path[i % count + 1]
+		local delta = q - p
+		local length = delta.Magnitude
+		local dir = delta.Unit
+		local mid = (p + q) / 2
+		-- the 0.01 step between neighbours stops coplanar tops from flickering
+		local top = roadTop + (i % 2) * 0.01
+		local base = CFrame.lookAt(mid, mid + dir)
+		ctx.P(model, "Road", V3(T.width, 0.4, length + 3), base * CF(0, top - 0.2, 0), C_TRACK, { Material = Enum.Material.Asphalt })
+
+		local bend = math.acos(math.clamp(dirAt(i):Dot(dirAt(i % count + 1)), -1, 1))
+		for _, side in { -1, 1 } do
+			if bend > math.rad(3) then
+				local curbColor = if i % 2 == 0 then C_CURB_RED else C_WHITE
+				ctx.P(model, "Curb", V3(1.5, 0.2, length + 0.1), base * CF(side * (half - 0.75), roadTop + 0.1, 0), curbColor, DECAL)
+			else
+				ctx.P(model, "EdgeLine", V3(0.5, 0.04, length), base * CF(side * (half - 0.5), roadTop + 0.03, 0), C_WHITE, DECAL)
+			end
+		end
+	end
+
+	-- checkpoint lines (flat accent strips; the server times with invisible gates on the same spots)
+	for _, index in T.checkpoints do
+		local p = path[index]
+		ctx.A(model, "CheckpointLine", V3(T.width, 0.04, 0.6), CFrame.lookAt(p, p + dirAt(index)) * CF(0, roadTop + 0.04, 0))
+	end
+
+	-- start / finish: checkered strip on the road and a gantry over it
+	local startPos = path[1]
+	local startCF = CFrame.lookAt(startPos, startPos + dirAt(1))
+	ctx.P(model, "StartStrip", V3(T.width, 0.04, 4), startCF * CF(0, roadTop + 0.03, 0), C_WHITE, DECAL)
+	for col = 0, T.width / 2 - 1 do
+		for row = 0, 1 do
+			if (col + row) % 2 == 0 then
+				ctx.P(
+					model,
+					"StartCheck",
+					V3(2, 0.045, 2),
+					startCF * CF(-half + 1 + col * 2, roadTop + 0.035, -1 + row * 2),
+					C_DARKER,
+					DECAL
+				)
+			end
+		end
+	end
+	local pillarX = half + 2.5
+	for _, side in { -1, 1 } do
+		ctx.T(model, "GantryPillar", V3(1.4, 14, 1.4), startCF * CF(side * pillarX, 7, 0))
+	end
+	ctx.P(model, "GantryBeam", V3(pillarX * 2 + 1.4, 1.2, 1.6), startCF * CF(0, 14.2, 0), C_DARKER)
+	local plate = ctx.P(model, "GantrySign", V3(pillarX * 2 - 1.4, 4, 0.5), startCF * CF(0, 12, 0), C_DARKER)
+	addSignText(plate, "SignFront", "Text", "START / FINISH", nil, 30, Enum.NormalId.Front)
+	addSignText(plate, "SignBack", "Text", "START / FINISH", nil, 30, Enum.NormalId.Back)
+	for _, dy in { -2.2, 2.2 } do
+		ctx.A(model, "GantryNeon", V3(pillarX * 2 - 1.4, 0.2, 0.7), startCF * CF(0, 12 + dy, 0))
+	end
+	addPointLight(plate, ctx.accent, 30, 0.8, true)
+
+	-- grandstand on the outside of the long diagonal
+	local standX, standZ = -30, 350
+	for tier = 0, 3 do
+		ctx.P(model, "StandTier", V3(40, 1.5, 3), CF(standX, 0.75 + tier * 1.5, standZ + tier * 3), C_STEEL, { Material = METAL })
+		ctx.T(model, "StandSeat", V3(38, 0.3, 1.6), CF(standX, 1.6 + tier * 1.5, standZ + tier * 3 - 0.3))
+	end
+	for _, sx in { -1, 1 } do
+		ctx.P(model, "StandPost", V3(0.8, 9, 0.8), CF(standX + sx * 19.6, 4.5, standZ + 10), C_DARK)
+	end
+	ctx.R(model, "StandRoof", V3(41, 0.6, 9), CF(standX, 9.3, standZ + 6), C_ROOF, "Roof")
+
+	-- flags along the start straight
+	for _, fx in { -70, -45, 5, 30 } do
+		ctx.C(model, "FlagPole", "Y", 8, 0.3, CF(fx, 4, 142), C_CHROME, CHROME_PROPS)
+		ctx.T(model, "Flag", V3(3.6, 2.4, 0.1), CF(fx + 1.9, 7, 142)).CanCollide = false
+	end
+
+	-- pedestrian link from the annex doorway to the start straight (bollards keep cars out)
+	local door = T.door
+	local linkLength = T.bounds.minZ - door.z
+	ctx.P(model, "Walkway", V3(door.halfWidth * 2, 0.4, linkLength), CF(door.x, roadTop - 0.2, door.z + linkLength / 2), C_STONE, { Material = Enum.Material.Concrete })
+	for _, sx in { -1, 1 } do
+		ctx.P(model, "WalkwayLine", V3(0.4, 0.04, linkLength), CF(door.x + sx * (door.halfWidth - 0.4), roadTop + 0.03, door.z + linkLength / 2), C_YELLOW, DECAL)
+	end
+	for _, bx in { -4.5, 0, 4.5 } do
+		ctx.C(model, "Bollard", "Y", 2.2, 0.8, CF(bx, roadTop + 1.1, door.z + 3.5), C_YELLOW, nil)
 	end
 	return model
 end
@@ -2010,6 +2179,8 @@ local function buildUnlockables(ctx: Ctx, plot: Model)
 			buildOffice(ctx, folder)
 		elseif kind == "TuningRoom" then
 			buildTuningRoom(ctx, folder)
+		elseif kind == "RaceTrack" then
+			buildRaceTrack(ctx, folder)
 		else
 			warn("[MapBuilder] unknown unlock kind " .. tostring(kind) .. " for " .. tostring(u.id))
 		end
@@ -2046,6 +2217,8 @@ local function buttonPosition(u: any): Vector3?
 		return Layout.OFFICE.button
 	elseif kind == "TuningRoom" then
 		return Layout.TUNING.button
+	elseif kind == "RaceTrack" then
+		return Layout.TRACK.button
 	end
 	return nil
 end

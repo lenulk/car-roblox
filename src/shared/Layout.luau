@@ -134,6 +134,133 @@ Layout.TUNING = {
 }
 Layout.DRIVE_SPAWN = faceOut(6, -78) -- on the connector road, nose toward the ring
 
+-- Private race track behind the Tuning annex (plot-local; the annex back wall is Z 103.5..104).
+-- The centerline is a closed loop built from a polygon whose corners are rounded with arcs (radius >= 30):
+-- start straight (+X), a short S-bend on the right side, the long diagonal back straight (~201 studs),
+-- a left-hand hairpin stack in the west and a right-hand hairpin in the infield. Lap length ~1160 studs.
+local function buildTrackPath(): ({ Vector3 }, number)
+	local zA = 124 -- start straight Z (road edge at Z 110)
+	local gap = 60 -- hairpin row spacing
+	local zC = zA + gap
+	local zB = zC + gap
+	local zH = zB + 54
+	local xW = -126 -- west edge of the centerline (road edge at X -140)
+	-- { x, z, radius } counter-clockwise (seen from +Y with X right, Z up)
+	local corners = {
+		{ 100, zA, 30 }, -- BR: start straight -> north
+		{ 100, 205, 40 }, -- S-bend part 1
+		{ 126, 255, 40 }, -- S-bend part 2
+		{ 126, 376, 30 }, -- NE: onto the long diagonal
+		{ xW, zH, 30 }, -- NW hairpin, entry
+		{ xW, zB, 30 }, -- NW hairpin, exit (heading east)
+		{ 48, zB, 30 }, -- infield hairpin, entry (right-hand)
+		{ 48, zC, 30 }, -- infield hairpin, exit (heading west)
+		{ xW, zC, 30 }, -- west hairpin, entry (left-hand)
+		{ xW, zA, 30 }, -- west hairpin, exit (heading east)
+	}
+	local arcStep = 8
+	local straightStep = 24
+	local n = #corners
+
+	local arcs = {}
+	for i = 1, n do
+		local prev = corners[(i - 2) % n + 1]
+		local cur = corners[i]
+		local nxt = corners[i % n + 1]
+		local d1 = Vector3.new(cur[1] - prev[1], 0, cur[2] - prev[2]).Unit
+		local d2 = Vector3.new(nxt[1] - cur[1], 0, nxt[2] - cur[2]).Unit
+		local turn = math.acos(math.clamp(d1:Dot(d2), -1, 1))
+		local sign = if d1.X * d2.Z - d1.Z * d2.X > 0 then 1 else -1
+		local radius = cur[3]
+		local trim = radius * math.tan(turn / 2)
+		local corner = Vector3.new(cur[1], 0, cur[2])
+		local a = corner - d1 * trim
+		local left = Vector3.new(-d1.Z, 0, d1.X)
+		arcs[i] = {
+			a = a,
+			b = corner + d2 * trim,
+			center = a + left * (sign * radius),
+			radius = radius,
+			turn = turn,
+			sign = sign,
+		}
+	end
+
+	local points: { Vector3 } = {}
+	for i = 1, n do
+		local arc = arcs[i]
+		local nextArc = arcs[i % n + 1]
+		local startAngle = math.atan2(arc.a.Z - arc.center.Z, arc.a.X - arc.center.X)
+		local steps = math.max(1, math.ceil(arc.radius * arc.turn / arcStep))
+		for j = 0, steps - 1 do
+			local angle = startAngle + arc.sign * arc.turn * j / steps
+			table.insert(points, Vector3.new(arc.center.X + arc.radius * math.cos(angle), 0, arc.center.Z + arc.radius * math.sin(angle)))
+		end
+		local run = nextArc.a - arc.b
+		local runLength = run.Magnitude
+		if runLength > 0.5 then
+			local pieces = math.max(1, math.ceil(runLength / straightStep))
+			for j = 0, pieces - 1 do
+				table.insert(points, arc.b + run * (j / pieces))
+			end
+		end
+	end
+
+	-- Rotate so the loop starts on the start straight (X -20, heading east).
+	local startX = -20
+	local insertAt = 0
+	for i = 1, #points do
+		local p, q = points[i], points[i % #points + 1]
+		if math.abs(p.Z - zA) < 0.01 and math.abs(q.Z - zA) < 0.01 and p.X <= startX and q.X > startX then
+			insertAt = i
+			break
+		end
+	end
+	assert(insertAt > 0, "track start straight not found")
+	table.insert(points, insertAt + 1, Vector3.new(startX, 0, zA))
+	local ordered: { Vector3 } = {}
+	for k = 0, #points - 1 do
+		table.insert(ordered, points[(insertAt + k) % #points + 1])
+	end
+
+	local total = 0
+	for i = 1, #ordered do
+		total += (ordered[i % #ordered + 1] - ordered[i]).Magnitude
+	end
+	return ordered, total
+end
+
+local trackPath, trackLength = buildTrackPath()
+
+-- 8 checkpoints spread evenly by distance (the start line, index 1, is not one of them).
+local function trackCheckpoints(path: { Vector3 }, total: number): { number }
+	local result = {}
+	local travelled = 0
+	local nextIndex = 1
+	for i = 1, #path - 1 do
+		travelled += (path[i + 1] - path[i]).Magnitude
+		if travelled >= nextIndex * total / 9 and nextIndex <= 8 then
+			table.insert(result, i + 1)
+			nextIndex += 1
+		end
+	end
+	return result
+end
+
+local trackStartDir = (trackPath[2] - trackPath[1]).Unit
+local trackSpawn = trackPath[1] - trackStartDir * 20
+
+Layout.TRACK = {
+	button = Vector3.new(0, 0, 99), -- price pad on the Tuning room floor, under the TUNE YOUR RIDE poster
+	door = { x = 0, halfWidth = 8, z = 104 }, -- opening in the annex back wall
+	bounds = { minX = -140, maxX = 140, minZ = 110, maxZ = 390 },
+	width = 28,
+	path = trackPath, -- closed loop, [1] = start/finish line, driving order
+	length = trackLength,
+	start = CFrame.lookAt(trackSpawn, trackSpawn + trackStartDir), -- spawn ~20 studs behind the line
+	checkpoints = trackCheckpoints(trackPath, trackLength), -- indices into path
+}
+
 -- Walk-in shoppers: gate sidewalk -> center aisle -> in front of a shelf (shelf X filled in at runtime).
 Layout.SHOPPER_PATH = {
 	Vector3.new(-11, 0, -58),

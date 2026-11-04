@@ -135,6 +135,184 @@ function DriveHUD.start()
 		Remotes.get("ReturnCar"):FireServer()
 	end)
 
+	----------------------------------------------------------------- lap timer (private race track)
+	-- Visible only while driving a car with OnTrack = true. The server publishes LapStart / NextCheckpoint /
+	-- CheckpointCount / LastLap / BestLap / LapCount as attributes on the car; the running time is computed here.
+	local timerContainer, timerBody = Theme.panel({
+		Name = "LapTimer",
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, 78),
+		Size = UDim2.fromOffset(290, 100),
+		Radius = 20,
+		Visible = false,
+	}, root)
+
+	local lapLabel = Theme.label({
+		Name = "Lap",
+		Position = UDim2.fromOffset(10, 4),
+		Size = UDim2.new(1, -20, 0, 40),
+		TextScaled = true,
+		Text = "0:00.000",
+	}, timerBody)
+	Theme.fitText(lapLabel, 18, 36)
+
+	local bestLabel = Theme.label({
+		Name = "Best",
+		Position = UDim2.fromOffset(12, 46),
+		Size = UDim2.new(0.5, -12, 0, 22),
+		TextScaled = true,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextColor3 = C.textDim,
+		Text = "",
+	}, timerBody)
+	Theme.fitText(bestLabel, 10, 16)
+
+	local checkpointLabel = Theme.label({
+		Name = "Checkpoint",
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.new(1, -12, 0, 46),
+		Size = UDim2.new(0.5, -12, 0, 22),
+		TextScaled = true,
+		TextXAlignment = Enum.TextXAlignment.Right,
+		TextColor3 = C.textDim,
+		Text = "",
+	}, timerBody)
+	Theme.fitText(checkpointLabel, 10, 16)
+
+	local messageLabel = Theme.label({
+		Name = "Message",
+		Position = UDim2.fromOffset(10, 70),
+		Size = UDim2.new(1, -20, 0, 24),
+		TextScaled = true,
+		TextColor3 = C.textDim,
+		Text = "",
+	}, timerBody)
+	Theme.fitText(messageLabel, 10, 18)
+
+	local function formatLap(seconds: number): string
+		local minutes = math.floor(seconds / 60)
+		return string.format("%d:%06.3f", minutes, seconds - minutes * 60)
+	end
+
+	local trackCar: Model? = nil
+	local trackConns: { RBXScriptConnection } = {}
+	local previousBest: number? = nil
+	local flashUntil = 0.0
+	local flashText = ""
+	local flashColor = C.text
+
+	local function numberAttr(model: Model, name: string): number?
+		local value = model:GetAttribute(name)
+		return if type(value) == "number" then value else nil
+	end
+
+	local function refreshTimerTexts()
+		local car = trackCar
+		if not car then
+			return
+		end
+		local best = numberAttr(car, "BestLap")
+		bestLabel.Text = Localizer.t("track_best") .. " " .. (if best then formatLap(best) else "-:--.---")
+		local passed = math.max((numberAttr(car, "NextCheckpoint") or 1) - 1, 0)
+		checkpointLabel.Text =
+			string.format("%s %d/%d", Localizer.t("track_checkpoint"), passed, numberAttr(car, "CheckpointCount") or 0)
+	end
+
+	local function onLapFinished(car: Model)
+		local lap = numberAttr(car, "LastLap")
+		if not lap then
+			return
+		end
+		local best = numberAttr(car, "BestLap")
+		local before = previousBest
+		local isBest = best ~= nil and math.abs(best - lap) < 1e-6 and (before == nil or lap < before)
+		previousBest = best
+		flashText = formatLap(lap)
+		flashColor = if isBest then C.money else C.text
+		flashUntil = os.clock() + 4
+		if before then
+			local diff = lap - before
+			messageLabel.Text = string.format("%+.3f", diff)
+			messageLabel.TextColor3 = if diff > 0 then C.danger else C.money
+		else
+			messageLabel.Text = ""
+		end
+		refreshTimerTexts()
+	end
+
+	local function setTimerCar(car: Model?)
+		for _, conn in trackConns do
+			conn:Disconnect()
+		end
+		trackConns = {}
+		trackCar = car
+		flashUntil = 0
+		timerContainer.Visible = car ~= nil
+		if not car then
+			return
+		end
+		previousBest = numberAttr(car, "BestLap")
+		lapLabel.TextColor3 = C.text
+		messageLabel.TextColor3 = C.textDim
+		messageLabel.Text = Localizer.t("track_start_hint")
+		refreshTimerTexts()
+		local function watch(name: string, fn: () -> ())
+			table.insert(trackConns, car:GetAttributeChangedSignal(name):Connect(fn))
+		end
+		watch("NextCheckpoint", refreshTimerTexts)
+		watch("BestLap", refreshTimerTexts)
+		watch("CheckpointCount", refreshTimerTexts)
+		-- the server sets LapCount last, so LastLap / BestLap are already current here
+		watch("LapCount", function()
+			onLapFinished(car)
+		end)
+		watch("LapStart", function()
+			if car:GetAttribute("LapStart") ~= nil and flashUntil == 0 and (numberAttr(car, "LapCount") or 0) == 0 then
+				messageLabel.Text = ""
+			end
+		end)
+	end
+
+	local function updateTimer()
+		local car = trackCar
+		if not car then
+			return
+		end
+		local now = os.clock()
+		if now < flashUntil then
+			lapLabel.Text = flashText
+			lapLabel.TextColor3 = flashColor
+			lapLabel.TextTransparency = if math.floor(now * 4) % 2 == 0 then 0 else 0.55
+			return
+		end
+		lapLabel.TextTransparency = 0
+		lapLabel.TextColor3 = C.text
+		local lapStart = numberAttr(car, "LapStart")
+		if lapStart then
+			lapLabel.Text = formatLap(math.max(Workspace:GetServerTimeNow() - lapStart, 0))
+		else
+			lapLabel.Text = "0:00.000"
+		end
+	end
+
+	Localizer.onLangChanged(function()
+		refreshTimerTexts()
+		if trackCar and numberAttr(trackCar, "LapStart") == nil then
+			messageLabel.Text = Localizer.t("track_start_hint")
+		end
+	end)
+
+	local function findTrackCar(part: BasePart): Model?
+		local node: Instance? = part.Parent
+		while node and node ~= Workspace do
+			if node:IsA("Model") and node:GetAttribute("OnTrack") == true then
+				return node
+			end
+			node = node.Parent
+		end
+		return nil
+	end
+
 	----------------------------------------------------------------- state
 	local seat: VehicleSeat? = nil
 	local seatMaxSpeed = DEFAULT_MAX_SPEED
@@ -200,6 +378,7 @@ function DriveHUD.start()
 			exitDrive()
 			return
 		end
+		updateTimer()
 		local velocity = current.AssemblyLinearVelocity
 		local planar = Vector3.new(velocity.X, 0, velocity.Z)
 		local speed = planar.Magnitude
@@ -238,6 +417,7 @@ function DriveHUD.start()
 			return
 		end
 		seat = part
+		setTimerCar(findTrackCar(part))
 		shownSpeed = 0
 		litCount = -1
 		setLit(0)
@@ -256,6 +436,7 @@ function DriveHUD.start()
 
 	exitDrive = function()
 		seat = nil
+		setTimerCar(nil)
 		if renderConn then
 			renderConn:Disconnect()
 			renderConn = nil

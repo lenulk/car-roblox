@@ -35,6 +35,7 @@ export type Data = {
 	cars: { [string]: CarSave },
 	selectedCar: string?,
 	ownedParts: { [string]: boolean },
+	bestLaps: { [string]: number }, -- private race track: best lap seconds per carId
 }
 
 type Profile = {
@@ -79,6 +80,7 @@ local function defaultData(player: Player): Data
 		cars = {},
 		selectedCar = nil,
 		ownedParts = {},
+		bestLaps = {},
 	}
 end
 

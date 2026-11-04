@@ -480,6 +480,20 @@ function Tuning.start()
 	driveGrad.Parent = driveBtn
 	local driveStroke = Theme.stroke(driveBtn, Color3.fromRGB(255, 200, 110), 3, 0.1)
 
+	-- TRACK button: drives onto the private race track (only visible once the player owns it)
+	local trackBtn = Theme.button({
+		Name = "TrackDrive",
+		AnchorPoint = Vector2.new(1, 0),
+		Size = UDim2.fromOffset(190, 34),
+		TextSize = 20,
+		TextScaled = true,
+		ZIndex = 4,
+		Visible = false,
+	}, topBar)
+	Theme.fitText(trackBtn, 12, 22)
+	Localizer.bind(trackBtn, "tuning_drive_track")
+	local trackStroke = Theme.stroke(trackBtn, C.stroke, 2, 0.3)
+
 	local closeBtn = Theme.button({
 		Name = "Close",
 		AnchorPoint = Vector2.new(1, 0),
@@ -547,10 +561,39 @@ function Tuning.start()
 	----------------------------------------------------------------------------------------------
 	-- Top bar refresh
 	----------------------------------------------------------------------------------------------
+	local shownTrack: boolean? = nil
+
+	-- DRIVE alone fills the slot; with the race track owned, DRIVE and TRACK share it (stacked).
+	local function layoutDriveButtons()
+		local s = snap()
+		local hasTrack = s ~= nil and s.hasTrack == true
+		shownTrack = hasTrack
+		trackBtn.Visible = hasTrack
+		local width = if compactMode then 136 else 190
+		local right = if compactMode then -(12 + 56 + 14) else -(16 + 56 + 16)
+		local top = if compactMode then 8 else 14
+		local fullHeight = 56
+		if hasTrack then
+			local barHeight = if compactMode then 72 else 88
+			local height = if compactMode then 32 else 38
+			local gap = barHeight - 2 * height - 8
+			driveHolder.Size = UDim2.fromOffset(width, height)
+			driveHolder.Position = UDim2.new(1, right, 0, 4 + math.max(gap, 0) / 2)
+			trackBtn.Size = UDim2.fromOffset(width, height)
+			trackBtn.Position = UDim2.new(1, right, 0, 4 + math.max(gap, 0) / 2 + height + 4)
+		else
+			driveHolder.Size = UDim2.fromOffset(width, fullHeight)
+			driveHolder.Position = UDim2.new(1, right, 0, top)
+		end
+	end
+
 	local function updateTopBar()
 		local s = snap()
 		moneyLabel.Text = Format.money(if s and type(s.money) == "number" then s.money else 0)
 		Localizer.bind(carName, "car_" .. previewCarId)
+		if shownTrack ~= (s ~= nil and s.hasTrack == true) then
+			layoutDriveButtons()
+		end
 		-- DRIVE drives the car on the turntable, so it is off while previewing a car the player doesn't own
 		local enabled = hasAnyCar() and hasCar(previewCarId) and not busy
 		driveBtn.AutoButtonColor = enabled
@@ -559,6 +602,10 @@ function Tuning.start()
 		driveGrad.Enabled = enabled
 		driveBtn.BackgroundColor3 = if enabled then C.accent else C.gray
 		driveStroke.Enabled = enabled
+		trackBtn.AutoButtonColor = enabled
+		trackBtn.TextColor3 = if enabled then C.text else C.textDim
+		trackBtn.BackgroundColor3 = if enabled then C.accentDark else C.gray
+		trackStroke.Enabled = enabled
 	end
 
 	----------------------------------------------------------------------------------------------
@@ -1444,6 +1491,8 @@ function Tuning.start()
 			hint.Visible = true
 		end
 
+		layoutDriveButtons()
+
 		local key = (if compact then "c" else "d") .. tostring(math.floor(contentWidth))
 		local changed = key ~= layoutKey
 		layoutKey = key
@@ -1495,6 +1544,7 @@ function Tuning.start()
 			return
 		end
 		isOpen = false
+		LocalPlayer:SetAttribute("TuningOpen", false)
 		dragInput = nil
 		pinching = false
 		restoreCamera()
@@ -1552,6 +1602,7 @@ function Tuning.start()
 		pinching = false
 
 		isOpen = true
+		LocalPlayer:SetAttribute("TuningOpen", true)
 		cam.CameraType = Enum.CameraType.Scriptable
 		cam.FieldOfView = TUNING_FOV
 		pcall(function()
@@ -1590,7 +1641,8 @@ function Tuning.start()
 		close()
 	end)
 
-	driveBtn.Activated:Connect(function()
+	-- Shared by DRIVE (mode nil: connector road) and TRACK (mode "track": private race track).
+	local function startDrive(mode: string?)
 		if busy or not isOpen or not hasAnyCar() or not hasCar(previewCarId) then
 			return
 		end
@@ -1606,10 +1658,18 @@ function Tuning.start()
 				end
 			end
 		end
-		local ok = callServer("DriveCar", carId)
+		local ok = if mode then callServer("DriveCar", carId, mode) else callServer("DriveCar", carId)
 		if ok and isOpen then
 			close()
 		end
+	end
+
+	driveBtn.Activated:Connect(function()
+		startDrive(nil)
+	end)
+
+	trackBtn.Activated:Connect(function()
+		startDrive("track")
 	end)
 
 	----------------------------------------------------------------------------------------------

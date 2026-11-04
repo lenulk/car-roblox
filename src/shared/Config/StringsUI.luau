@@ -77,6 +77,10 @@ return {
 		hud_shop = "ร้านค้า",
 		-- drive HUD (used by DriveHUD)
 		drive_return = "กลับ",
+		track_lap = "รอบนี้",
+		track_best = "ดีที่สุด",
+		track_checkpoint = "จุดเช็ก",
+		track_start_hint = "ขับผ่านเส้นสตาร์ทเพื่อเริ่มจับเวลา",
 	},
 	en = {
 		-- common
@@ -153,5 +157,9 @@ return {
 		hud_shop = "Shop",
 		-- drive HUD (used by DriveHUD)
 		drive_return = "Return",
+		track_lap = "Lap",
+		track_best = "Best",
+		track_checkpoint = "Checkpoint",
+		track_start_hint = "Cross the start line to begin timing",
 	},
 }

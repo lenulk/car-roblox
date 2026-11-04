@@ -203,7 +203,8 @@ uiName ∈ `"Hire" | "Upgrade"(arg = unlockId) | "Tuning" | "Daily" | "Offline"(
 effect ∈ `"Unlock" | "Cash" | "Repair" | "Level" | "Wash" | "Coins"` (`Coins` and `Cash` use `text`).
 Client → server (RemoteFunctions return `(ok: boolean, messageKey: string)`; the server also sends a Notify toast, so the client must not):
 `HireEmployee(role)`, `UpgradeEmployee(slot)`, `Upgrade(unlockId)`, `ClaimDaily()`, `Rebirth()`, `BuyTheme(themeId)`,
-`BuyCar(carId)`, `SelectCar(carId)`, `Customize(carId, category, optionId)`, `UpgradeCar(carId, part)`, `DriveCar(carId)`;
+`BuyCar(carId)`, `SelectCar(carId)`, `Customize(carId, category, optionId)`, `UpgradeCar(carId, part)`, `DriveCar(carId, mode?)` (`mode` = nil: connector road; `"track"`: private race track, needs the `RaceTrack` unlock; the car gets attribute
+`OnTrack = true`, and `RaceTrackService` publishes `LapStart`, `NextCheckpoint`, `CheckpointCount`, `LastLap`, `BestLap`, `LapCount` as attributes on the car model);
 RemoteEvents: `RequestSnapshot()`, `SetSetting(key, value)`, `ReturnCar()`.
 Game passes are bought client-side with `MarketplaceService:PromptGamePassPurchase(player, id)`; the server listens for the result.
 

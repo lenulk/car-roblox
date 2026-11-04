@@ -18,6 +18,7 @@ local PlayerData = require(script.Parent.PlayerData)
 local PlotService = require(script.Parent.PlotService)
 local UnlockService = require(script.Parent.UnlockService)
 local MapBuilder = require(script.Parent.MapBuilder)
+local ShowcaseService = require(script.Parent.ShowcaseService)
 local VehicleFolder = script.Parent.Parent:WaitForChild("Vehicle")
 local VehicleBuilder = require(VehicleFolder:WaitForChild("VehicleBuilder"))
 local VehicleController = require(VehicleFolder:WaitForChild("VehicleController"))
@@ -25,6 +26,7 @@ local VehicleController = require(VehicleFolder:WaitForChild("VehicleController"
 local PersonalCarService = {}
 
 local ROOM = "TuningRoom"
+local TRACK = "RaceTrack"
 
 local carsFolder: Folder
 local activeCars: { [Player]: Model } = {}
@@ -56,6 +58,7 @@ local function ensureStarterCar(player: Player)
 		d.cars.Sedan = newCarSave()
 		d.selectedCar = "Sedan"
 	end)
+	ShowcaseService.refresh(player)
 end
 
 local function charge(player: Player, price: number): boolean
@@ -110,6 +113,7 @@ local function buyCar(player: Player, data: PlayerData.Data, carId: any): (boole
 		d.cars[car.id] = newCarSave()
 		d.selectedCar = car.id
 	end)
+	ShowcaseService.refresh(player)
 	notify(player, "notify_car_bought", { Strings.get(langOf(player), "car_" .. car.id) })
 	return true, "notify_car_bought"
 end
@@ -122,6 +126,7 @@ local function selectCar(player: Player, data: PlayerData.Data, carId: any): (bo
 	PlayerData.update(player, function(d)
 		d.selectedCar = carId
 	end)
+	ShowcaseService.refresh(player)
 	notify(player, "notify_car_selected", { Strings.get(langOf(player), "car_" .. carId) })
 	return true, "notify_car_selected"
 end
@@ -157,6 +162,7 @@ local function customize(player: Player, data: PlayerData.Data, carId: any, cate
 		d.ownedParts[key] = true
 		d.cars[carId].custom[category] = optionId
 	end)
+	ShowcaseService.refresh(player)
 	notify(player, if owned then "notify_part_applied" else "notify_part_bought")
 	return true, if owned then "notify_part_applied" else "notify_part_bought"
 end
@@ -189,18 +195,24 @@ function PersonalCarService.despawn(player: Player)
 		activeCars[player] = nil
 		pcall(VehicleController.detach, car)
 		car:Destroy()
+		ShowcaseService.setDriving(player, false)
 		PlayerData.push(player)
 	end
 end
 
-local function driveCar(player: Player, data: PlayerData.Data, carId: any): (boolean, string)
+local function driveCar(player: Player, data: PlayerData.Data, carId: any, mode: any): (boolean, string)
 	local plotIndex = PlotService.getPlotIndex(player)
 	local save = if type(carId) == "string" then data.cars[carId] else nil
 	local character = player.Character
 	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
-	if not plotIndex or not save or not humanoid or humanoid.Health <= 0 then
+	if (mode ~= nil and mode ~= "track") or not plotIndex or not save or not humanoid or humanoid.Health <= 0 then
 		notify(player, "notify_need_car")
 		return false, "notify_need_car"
+	end
+	local onTrack = mode == "track"
+	if onTrack and not data.unlocks[TRACK] then
+		notify(player, "notify_need_track")
+		return false, "notify_need_track"
 	end
 	PersonalCarService.despawn(player)
 
@@ -209,10 +221,16 @@ local function driveCar(player: Player, data: PlayerData.Data, carId: any): (boo
 	local car = VehicleBuilder.make(visual, stats)
 	car.Name = player.Name .. "_Car"
 	car:SetAttribute("OwnerUserId", player.UserId)
-	car:PivotTo(Layout.toWorld(plotIndex, Layout.DRIVE_SPAWN) * CFrame.new(0, 1, 0))
+	car:SetAttribute("CarId", carId)
+	local spawnCFrame = if onTrack then Layout.TRACK.start else Layout.DRIVE_SPAWN
+	car:PivotTo(Layout.toWorld(plotIndex, spawnCFrame) * CFrame.new(0, 1, 0))
+	if onTrack then
+		car:SetAttribute("OnTrack", true)
+	end
 	car.Parent = carsFolder
 	VehicleController.attach(car, stats)
 	activeCars[player] = car
+	ShowcaseService.setDriving(player, true)
 
 	local seat = car:FindFirstChild("DriveSeat", true)
 	if seat and seat:IsA("VehicleSeat") then
@@ -359,6 +377,8 @@ function PersonalCarService.start()
 		snapshot.selectedCar = data.selectedCar
 		snapshot.ownedParts = table.clone(data.ownedParts)
 		snapshot.driving = activeCars[player] ~= nil
+		snapshot.hasTrack = data.unlocks[TRACK] == true
+		snapshot.bestLaps = table.clone(data.bestLaps)
 	end)
 end
 

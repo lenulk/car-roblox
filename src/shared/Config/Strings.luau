@@ -51,6 +51,7 @@ local Strings = {
 		unlock_Shelf4 = "ชั้นวางล้อแม็ก",
 		unlock_Dyno = "เครื่องวัดแรงม้า",
 		unlock_TuningRoom = "อู่ทูนรถ",
+		unlock_RaceTrack = "สนามแข่งส่วนตัว",
 		prompt_buy = "ซื้อ",
 		prompt_repair = "ซ่อม",
 		prompt_hire = "เปิด",
@@ -134,6 +135,8 @@ local Strings = {
 		notify_vip_arrived = "ลูกค้า VIP มาถึงแล้ว!",
 		notify_gamepass_thanks = "ขอบคุณที่สนับสนุนนะ!",
 		notify_need_car = "ซื้อรถคันนี้ก่อนนะ",
+		notify_need_track = "ต้องซื้อสนามแข่งก่อน",
+		notify_track_best = "สถิติใหม่! %s",
 	},
 	en = {
 		hud_stars = "Shop stars",
@@ -186,6 +189,7 @@ local Strings = {
 		unlock_Shelf4 = "Rims shelf",
 		unlock_Dyno = "Dyno",
 		unlock_TuningRoom = "Tuning garage",
+		unlock_RaceTrack = "Private race track",
 		prompt_buy = "Buy",
 		prompt_repair = "Repair",
 		prompt_hire = "Open",
@@ -269,6 +273,8 @@ local Strings = {
 		notify_vip_arrived = "A VIP customer is here!",
 		notify_gamepass_thanks = "Thank you for your support!",
 		notify_need_car = "Buy this car first",
+		notify_need_track = "Buy the race track first",
+		notify_track_best = "New best lap! %s",
 	},
 }
 

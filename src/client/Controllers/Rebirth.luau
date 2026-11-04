@@ -299,11 +299,13 @@ function Rebirth.start()
 		nextValue.Text = formatMultiplier(nextMultiplier)
 
 		local owned = 0
-		local total = #Unlocks.list
+		local total = 0
 		local unlocked: any = snapshot.unlocks
-		if type(unlocked) == "table" then
-			for _, entry in Unlocks.list do
-				if unlocked[entry.id] then
+		for _, entry in Unlocks.list do
+			-- personal unlocks (race track) are not part of the rebirth requirement
+			if not (entry :: any).keepOnRebirth then
+				total += 1
+				if type(unlocked) == "table" and unlocked[entry.id] then
 					owned += 1
 				end
 			end

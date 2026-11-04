@@ -12,6 +12,7 @@ local PlayerData = require(script.Parent.PlayerData)
 local PlotService = require(script.Parent.PlotService)
 local UnlockService = require(script.Parent.UnlockService)
 local HireService = require(script.Parent.HireService)
+local ShowcaseService = require(script.Parent.ShowcaseService)
 local CustomerService = require(script.Parent.CustomerService)
 local ShopService = require(script.Parent.ShopService)
 local ThemeService = require(script.Parent.ThemeService)
@@ -41,7 +42,14 @@ local function rebirth(player: Player): (boolean, string)
 			d.money = Game.STARTING_MONEY
 			d.safe = 0
 			d.starPoints = 0
-			d.unlocks = {}
+			-- the race track is personal (like cars): it stays owned
+			local kept: { [string]: boolean } = {}
+			for _, entry in Unlocks.list do
+				if (entry :: any).keepOnRebirth and d.unlocks[entry.id] then
+					kept[entry.id] = true
+				end
+			end
+			d.unlocks = kept
 			d.levels = {}
 			d.stock = {}
 			d.employees = {}
@@ -55,6 +63,7 @@ local function rebirth(player: Player): (boolean, string)
 			end
 		end)
 		UnlockService.restorePlot(player, plotIndex)
+		ShowcaseService.refresh(player)
 		ThemeService.applyPlot(plotIndex)
 		CustomerService.restart(player, plotIndex)
 		ShopService.restart(player, plotIndex)

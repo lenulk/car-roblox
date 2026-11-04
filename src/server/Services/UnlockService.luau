@@ -121,7 +121,7 @@ function UnlockService.nextUnlock(player: Player): any?
 	end
 	local fallback: any = nil
 	for _, entry in Unlocks.list do
-		if not data.unlocks[entry.id] then
+		if not data.unlocks[entry.id] and not (entry :: any).keepOnRebirth then
 			if not (entry :: any).anytime then
 				return entry
 			end
@@ -186,6 +186,8 @@ local function buttonPosition(plotIndex: number, entry: any): Vector3
 		p = Layout.OFFICE.button
 	elseif kind == "TuningRoom" then
 		p = Layout.TUNING.button
+	elseif kind == "RaceTrack" then
+		p = Layout.TRACK.button
 	else
 		p = Layout.PARKING_BUTTON
 	end
@@ -201,11 +203,16 @@ function UnlockService.nextButtonPosition(player: Player): Vector3?
 	return buttonPosition(plotIndex, entry)
 end
 
+-- True if the unlock's `requires` (if any) is owned.
+local function requirementMet(data: PlayerData.Data, entry: any): boolean
+	return entry.requires == nil or data.unlocks[entry.requires] == true
+end
+
 local function refreshButtons(plotIndex: number, player: Player?)
 	local data = if player then PlayerData.get(player) else nil
 	for _, entry in Unlocks.list do
 		if not entry.startOwned then
-			if data and not data.unlocks[entry.id] then
+			if data and not data.unlocks[entry.id] and requirementMet(data, entry) then
 				show(plotIndex, "Buttons", entry.id)
 			else
 				hide(plotIndex, "Buttons", entry.id)
@@ -369,7 +376,7 @@ local function tryPurchase(player: Player, plotIndex: number, id: string)
 	end
 	local entry = Unlocks.byId[id]
 	local data = PlayerData.get(player)
-	if not entry or entry.startOwned or not data or data.unlocks[id] then
+	if not entry or entry.startOwned or not data or data.unlocks[id] or not requirementMet(data, entry) then
 		return
 	end
 	if data.money < entry.price then

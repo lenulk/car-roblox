@@ -27,7 +27,7 @@ local DEFINITIONS: { [string]: string } = {
 	SelectCar = "RemoteFunction", -- (carId) -> ok, key
 	Customize = "RemoteFunction", -- (carId, category, optionId) -> ok, key (buys if needed, then applies)
 	UpgradeCar = "RemoteFunction", -- (carId, part) -> ok, key
-	DriveCar = "RemoteFunction", -- (carId) -> ok, key
+	DriveCar = "RemoteFunction", -- (carId, mode?) -> ok, key   (mode: nil = connector road, "track" = private race track)
 	ReturnCar = "RemoteEvent", -- ()
 }
 
