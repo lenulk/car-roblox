@@ -15,13 +15,13 @@ return {
 	repairDone = { id = "rbxassetid://100620890674842", volume = 0.6, maxDistance = 90 },
 	purchase = { id = "rbxassetid://115870602105854", volume = 0.6 }, -- client UI sound (not 3D)
 
-	-- Opening scene (Prologue). Ids are empty on purpose: upload your own files, then paste the ids.
-	crowdLoop = { id = "", volume = 0.5, looped = true }, -- stadium crowd ambience
-	crowdCheer = { id = "", volume = 0.7, cooldown = 1.5 },
-	crowdGasp = { id = "", volume = 0.8, cooldown = 1.5 },
-	countdownBeep = { id = "", volume = 0.6, cooldown = 0.3 },
-	countdownGo = { id = "", volume = 0.7, cooldown = 0.3 },
-	raceEngine = { id = "", volume = 0.5, looped = true, maxDistance = 200 }, -- PlaybackSpeed follows speed
-	engineSputter = { id = "", volume = 0.7, maxDistance = 200, cooldown = 1 },
-	engineBlow = { id = "", volume = 1, maxDistance = 400, cooldown = 1 },
+	-- Opening scene (Prologue): procedural files from tools/make_sounds.py.
+	crowdLoop = { id = "rbxassetid://116098175197276", volume = 0.5, looped = true }, -- stadium crowd ambience
+	crowdCheer = { id = "rbxassetid://117528581436541", volume = 0.7, cooldown = 1.5 },
+	crowdGasp = { id = "rbxassetid://133916300509104", volume = 0.8, cooldown = 1.5 },
+	countdownBeep = { id = "rbxassetid://109630702460963", volume = 0.3, cooldown = 0.3 }, -- square beeps are dense: keep them quieter
+	countdownGo = { id = "rbxassetid://110026163171249", volume = 0.35, cooldown = 0.3 },
+	raceEngine = { id = "rbxassetid://135027949092196", volume = 0.5, looped = true, maxDistance = 200 }, -- PlaybackSpeed follows speed
+	engineSputter = { id = "rbxassetid://78756262461569", volume = 0.7, maxDistance = 200, cooldown = 1 },
+	engineBlow = { id = "rbxassetid://138921596909488", volume = 1, maxDistance = 400, cooldown = 1 },
 }
