@@ -1,10 +1,14 @@
 --!strict
 -- Tutorial card: shows steps 1..3 (snapshot.tutorialStep), then a short celebration when the tutorial is done.
 
+local Players = game:GetService("Players")
+
 local Client = (script.Parent :: Instance).Parent :: Instance
 local ClientState: any = require(Client:WaitForChild("ClientState") :: ModuleScript)
 local Theme: any = require(Client:WaitForChild("Theme") :: ModuleScript)
 local Localizer: any = require((script.Parent :: Instance):WaitForChild("Localizer") :: ModuleScript)
+
+local LocalPlayer = Players.LocalPlayer
 
 local Tutorial = {}
 
@@ -56,6 +60,13 @@ function Tutorial.start()
 		TextYAlignment = Enum.TextYAlignment.Top,
 	}, body)
 	local messageLimit = Theme.fitText(message, 11, 18)
+
+	-- hidden while the opening scene (Prologue) plays
+	local function syncPrologue()
+		container.Visible = LocalPlayer:GetAttribute("InPrologue") ~= true
+	end
+	LocalPlayer:GetAttributeChangedSignal("InPrologue"):Connect(syncPrologue)
+	syncPrologue()
 
 	local finished = false
 	local seenActive = false

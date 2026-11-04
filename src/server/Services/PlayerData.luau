@@ -35,6 +35,7 @@ export type Data = {
 	selectedCar: string?,
 	ownedParts: { [string]: boolean },
 	bestLaps: { [string]: number }, -- private race track: best lap seconds per carId
+	prologueDone: boolean, -- opening scene watched (or skipped)
 }
 
 type Profile = {
@@ -79,6 +80,7 @@ local function defaultData(player: Player): Data
 		selectedCar = nil,
 		ownedParts = {},
 		bestLaps = {},
+		prologueDone = false,
 	}
 end
 
@@ -140,6 +142,7 @@ local function buildSnapshot(player: Player, data: Data): { [string]: any }
 		unlocks = table.clone(data.unlocks),
 		freeHireAvailable = not data.freeHireUsed,
 		tutorialStep = data.tutorialStep,
+		prologueDone = data.prologueDone,
 		settings = table.clone(data.settings),
 	}
 	for _, field in snapshotFields do
@@ -221,7 +224,13 @@ local function load(player: Player)
 		if ok then
 			canSave = true
 			if type(result) == "table" then
-				data = reconcile(result, data)
+				local saved: any = result
+				local hadPrologueField = saved.prologueDone ~= nil
+				data = reconcile(saved, data)
+				-- Players who already made progress before the prologue existed never see it.
+				if not hadPrologueField and (data.carsRepaired > 0 or data.totalEarned > 0 or data.tutorialStep > 1) then
+					data.prologueDone = true
+				end
 			end
 		else
 			-- Never overwrite a save we could not read.
@@ -250,6 +259,11 @@ local function onSetSetting(player: Player, key: any, value: any)
 	elseif key == "music" and type(value) == "boolean" then
 		PlayerData.update(player, function(data)
 			data.settings.music = value
+		end)
+	elseif key == "prologueDone" and value == true then
+		-- one way only: false -> true
+		PlayerData.update(player, function(data)
+			data.prologueDone = true
 		end)
 	end
 end

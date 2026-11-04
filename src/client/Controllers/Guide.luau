@@ -92,7 +92,7 @@ function Guide.start()
 
 	local function refresh()
 		local t = target
-		if t == nil then
+		if t == nil or LocalPlayer:GetAttribute("InPrologue") == true then
 			beam.Enabled = false
 			arrowGui.Enabled = false
 			return
@@ -129,6 +129,8 @@ function Guide.start()
 		end)
 	end
 
+	-- hidden while the opening scene (Prologue) plays
+	LocalPlayer:GetAttributeChangedSignal("InPrologue"):Connect(refresh)
 	LocalPlayer.CharacterAdded:Connect(bindCharacter)
 	if LocalPlayer.Character then
 		bindCharacter(LocalPlayer.Character)
