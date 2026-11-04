@@ -1,6 +1,6 @@
 --!strict
 return {
-	STARTING_MONEY = 1000000, -- TEMP TEST (was 100): wallet money for a new player
+	STARTING_MONEY = 10000, -- wallet money for a new player
 	DATASTORE_NAME = "GarageTycoon_v1", -- DataStore key name (bump the version to reset all saves)
 	AUTOSAVE_INTERVAL = 60, -- seconds between autosaves
 	QUEUE_CAPACITY_BASE = 3, -- cars that can wait in the queue before the Parking unlock

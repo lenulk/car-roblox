@@ -47,7 +47,7 @@ local Items: { Item } = {
 local Products = {
 	-- Studio only: products/passes with id 0 are still shown, and buying them runs the real grant code through
 	-- the DebugPurchase remote instead of MarketplaceService (so everything is testable before ids exist).
-	DEBUG_FAKE_IN_STUDIO = true,
+	DEBUG_FAKE_IN_STUDIO = false,
 
 	CashPacks = CashPacks,
 	Boosts = Boosts,
