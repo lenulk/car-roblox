@@ -21,6 +21,10 @@ local categories = {
 			{ id = "B00020", price = 800 },
 			{ id = "6BFF3A", price = 1500 },
 			{ id = "FFD700", price = 2500 },
+			-- Robux only (no money price): owned once the product is bought
+			{ id = "Chrome", price = 0, robuxProduct = "PaintChrome" },
+			{ id = "Gold", price = 0, robuxProduct = "PaintGold" },
+			{ id = "Rainbow", price = 0, robuxProduct = "PaintRainbow" },
 		},
 	},
 	{
@@ -123,6 +127,7 @@ local categories = {
 			{ id = "8E3BD9", price = 2000 },
 			{ id = "FF7A1A", price = 2000 },
 			{ id = "FFFFFF", price = 2000 },
+			{ id = "Rainbow", price = 0, robuxProduct = "NeonRainbow" },
 		},
 	},
 	{
@@ -155,6 +160,7 @@ local categories = {
 			{ id = "19C3D6", price = 3000 },
 			{ id = "FF4FA3", price = 3000 },
 			{ id = "8E3BD9", price = 3000 },
+			{ id = "Galaxy", price = 0, robuxProduct = "SmokeGalaxy" },
 		},
 	},
 	{
@@ -192,13 +198,39 @@ local DEFAULTS = {
 	decal = "None",
 }
 
--- "RRGGBB" to Color3, white if the hex is invalid
+-- Robux-only options are named, not hex: this is the colour they show as in swatches / before any special look applies.
+local SPECIAL_COLORS: { [string]: Color3 } = {
+	Chrome = Color3.fromRGB(226, 230, 238),
+	Gold = Color3.fromRGB(255, 196, 48),
+	Rainbow = Color3.fromHSV(0.96, 0.85, 1),
+	Galaxy = Color3.fromRGB(140, 90, 255),
+}
+
+-- "RRGGBB" (or a named special option) to Color3, white if the hex is invalid
 local function hexToColor(hex: string): Color3
+	local special = SPECIAL_COLORS[hex]
+	if special then
+		return special
+	end
 	local ok, color = pcall(Color3.fromHex, "#" .. hex)
 	if ok then
 		return color
 	end
 	return Color3.new(1, 1, 1)
+end
+
+-- the option table ({ id, price, robuxProduct? }) or nil
+local function option(category: string, optionId: string): any?
+	local cat = byId[category]
+	if cat == nil then
+		return nil
+	end
+	for _, entry in cat.options do
+		if entry.id == optionId then
+			return entry
+		end
+	end
+	return nil
 end
 
 -- price of one option in a category, nil if either id is unknown
@@ -221,4 +253,5 @@ return {
 	DEFAULTS = DEFAULTS,
 	hexToColor = hexToColor,
 	price = price,
+	option = option,
 }

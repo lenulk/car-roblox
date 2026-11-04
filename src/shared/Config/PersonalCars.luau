@@ -7,6 +7,14 @@ local list = {
 	{ id = "Muscle", price = 35000, stats = { maxSpeed = 95, accel = 1.35, handling = 0.95, braking = 1, grip = 1 } },
 	{ id = "Sports", price = 60000, stats = { maxSpeed = 108, accel = 1.3, handling = 1.25, braking = 1.2, grip = 1.15 } },
 	{ id = "Super", price = 150000, stats = { maxSpeed = 125, accel = 1.5, handling = 1.35, braking = 1.3, grip = 1.25 } },
+	-- Robux only (robuxProduct): never charged in money, `price` only sets the cost of performance upgrades.
+	-- A little above Super: about +8% top speed / acceleration.
+	{
+		id = "Hyper",
+		price = 200000,
+		robuxProduct = "CarHyper",
+		stats = { maxSpeed = 135, accel = 1.62, handling = 1.46, braking = 1.4, grip = 1.35 },
+	},
 }
 local byId = {}
 for _, entry in list do

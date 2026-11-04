@@ -49,6 +49,8 @@ local function newCarSave(): PlayerData.CarSave
 	return { custom = table.clone(Customization.DEFAULTS), upgrades = upgrades }
 end
 
+PersonalCarService.newCarSave = newCarSave -- PurchaseService grants the Robux car with it
+
 local function ensureStarterCar(player: Player)
 	local data = PlayerData.get(player)
 	if not data or not data.unlocks[ROOM] or next(data.cars) ~= nil then
@@ -106,6 +108,11 @@ local function buyCar(player: Player, data: PlayerData.Data, carId: any): (boole
 	if data.cars[car.id] then
 		return true, "notify_car_bought"
 	end
+	if car.robuxProduct then
+		-- Robux-only car: the grant comes from PurchaseService, never from a money purchase
+		notify(player, "notify_robux_only")
+		return false, "notify_robux_only"
+	end
 	if not charge(player, car.price) then
 		return false, "notify_not_enough_money"
 	end
@@ -154,6 +161,11 @@ local function customize(player: Player, data: PlayerData.Data, carId: any, cate
 		return false, "notify_need_car"
 	end
 	local key = category .. ":" .. optionId
+	if option.robuxProduct and data.ownedParts[key] ~= true then
+		-- Robux-only option that was never bought (also stops a hacked client from applying it)
+		notify(player, "notify_robux_only")
+		return false, "notify_robux_only"
+	end
 	local owned = option.price <= 0 or data.ownedParts[key] == true
 	if not owned and not charge(player, option.price) then
 		return false, "notify_not_enough_money"

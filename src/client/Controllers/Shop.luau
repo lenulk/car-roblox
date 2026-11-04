@@ -15,6 +15,7 @@ local Format: any = require(Shared:WaitForChild("Format") :: ModuleScript)
 local Config = Shared:WaitForChild("Config")
 local GamePasses: any = require(Config:WaitForChild("GamePasses") :: ModuleScript)
 local Products: any = require(Config:WaitForChild("Products") :: ModuleScript)
+local DecorConfig: any = require(Config:WaitForChild("Decor") :: ModuleScript)
 local Controllers = script.Parent :: Instance
 local Client = Controllers.Parent :: Instance
 local ClientState: any = require(Client:WaitForChild("ClientState") :: ModuleScript)
@@ -41,14 +42,29 @@ local ICONS: { [string]: string } = {
 	AutoCollect = "🧲",
 	FastStaff = "⚡",
 	VIP = "👑",
+	-- one-time Robux items (round 2)
+	PaintChrome = "🪞",
+	PaintGold = "🥇",
+	PaintRainbow = "🌈",
+	NeonRainbow = "💡",
+	SmokeGalaxy = "🌌",
+	ThemeGold = "🏛️",
+	CarHyper = "🏎️",
+	StarterPack = "🎁",
+	DecorBear = "🐻",
+	DecorRobot = "🤖",
+	DecorDragon = "🐉",
+	DecorGold = "🏆",
+	DecorFireworks = "🎆",
 }
 
 local RIBBONS: { [string]: string } = {
 	CashM = "shop_popular",
 	CashXL = "shop_best_value",
+	StarterPack = "shop_best_value",
 }
 
--- A card to show. kind: "cash" | "boost" | "instant" | "pass".
+-- A card to show. kind: "cash" | "boost" | "instant" | "pass" | "item" (one-time Robux item, owned badge afterwards).
 type Item = {
 	kind: string,
 	key: string,
@@ -56,7 +72,7 @@ type Item = {
 	robux: number?,
 	nameKey: string,
 	descKey: string,
-	descArg: number?,
+	descArg: any,
 	infoType: Enum.InfoType,
 }
 
@@ -113,7 +129,36 @@ local function passItems(): { Item }
 	return items
 end
 
--- One entry per tab. Round 2 adds "Special" and "Storefront" here.
+-- One-time Robux items (Products.Items). decor = true lists the storefront decorations, false everything else.
+local function oneTimeItems(decor: boolean): { Item }
+	local items: { Item } = {}
+	for _, p in Products.Items do
+		local grant: any = p.grant
+		local isDecor = type(grant) == "table" and grant.decor ~= nil
+		if isDecor == decor and visible(p.id) then
+			local descArg: any = nil
+			if isDecor then
+				local decorItem: any = DecorConfig.byId[grant.decor]
+				descArg = if decorItem then tostring(math.floor(decorItem.bonus * 100 + 0.5)) else "0"
+			elseif type(grant) == "table" and type(grant.money) == "number" then
+				descArg = Format.money(grant.money)
+			end
+			table.insert(items, {
+				kind = "item",
+				key = p.key,
+				id = p.id,
+				robux = p.robux,
+				nameKey = "item_" .. p.key,
+				descKey = "item_" .. p.key .. "_desc",
+				descArg = descArg,
+				infoType = Enum.InfoType.Product,
+			})
+		end
+	end
+	return items
+end
+
+-- One entry per tab.
 local TABS: { { id: string, labelKey: string, items: () -> { Item } } } = {
 	{
 		id = "cash",
@@ -131,6 +176,20 @@ local TABS: { { id: string, labelKey: string, items: () -> { Item } } } = {
 				table.insert(items, item)
 			end
 			return items
+		end,
+	},
+	{
+		id = "special",
+		labelKey = "shop_tab_special",
+		items = function()
+			return oneTimeItems(false)
+		end,
+	},
+	{
+		id = "storefront",
+		labelKey = "shop_tab_storefront",
+		items = function()
+			return oneTimeItems(true)
 		end,
 	},
 	{
@@ -486,6 +545,11 @@ function Shop.start()
 				valueLabel.TextColor3 = if none then C.textDim else C.money
 			elseif item.kind == "pass" then
 				local owned: any = snapshot.gamepasses
+				local isOwned = type(owned) == "table" and owned[item.key] == true
+				buyButton.Visible = not isOwned
+				ownedBadge.Visible = isOwned
+			elseif item.kind == "item" then
+				local owned: any = snapshot.itemsOwned
 				local isOwned = type(owned) == "table" and owned[item.key] == true
 				buyButton.Visible = not isOwned
 				ownedBadge.Visible = isOwned

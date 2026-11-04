@@ -283,7 +283,34 @@ DataStore cannot store Color3: every saved color is a hex string `"RRGGBB"`.
 - `PlayerData.saveNow(player): boolean`; `RepairService.finishAll(player): number` / `activeCount(player)`; `OfflineService.estimatePerSecond(player)`; `EconomyService.multiplier(player, excludeBoost?)`; `GamePassService.debugGrant(player, key)`.
 - Data fields: `receipts: {[PurchaseId]: os.time}`, `boostUntil: number` (os.time, 0 = none).
 - Snapshot adds: `cashPacks = { CashS = n, ... }` (cached 20 s), `boostEndsAt` + `serverTime` (os.time of both; client counts down with its own clock), `repairsActive`; `multiplier` includes the boost while active; `gamepasses` also lists `VIP`.
-- Client: `Shop.open(tab?)` / `OpenUI("Shop", tab?)` with tab ∈ `"cash" | "boost" | "pass"`; tabs come from the `TABS` list in `Shop.luau`.
+- Client: `Shop.open(tab?)` / `OpenUI("Shop", tab?)` with tab ∈ `"cash" | "boost" | "special" | "storefront" | "pass"`; tabs come from the `TABS` list in `Shop.luau`.
+
+### Robux purchases (round 2): Robux-only items + storefront decorations
+
+- `Config/Products.Items` (kind `unlock`): `{ key, id, robux, grant = { part?, theme?, car?, decor?, money? }, once? }`. `part = "category:optionId"` (→ `data.ownedParts`),
+  `theme` (→ `ownedThemes`), `car` (→ `data.cars`, same as `BuyCar`; a player with no car also gets the starter Sedan), `decor` (→ `decorOwned`), `money` (bought cash, not counted as earned),
+  `once` = boolean Data field set on purchase (`starterPackBought`). Owning everything an item gives already → the receipt is still granted, toast `notify_already_owned`, nothing else changes.
+- Robux-only config entries carry `robuxProduct = "<Items key>"` and no money price: `Customization` options `paint` Chrome / Gold / Rainbow, `neon` Rainbow, `smoke` Galaxy;
+  `Themes.GoldGarage`; `PersonalCars.Hyper` (`price` is only the base of its upgrade costs). `Customize`, `BuyTheme` and `BuyCar` return `false, "notify_robux_only"` for such an entry that is not owned.
+  `Customization.option(category, id)` returns the option table; `Customization.hexToColor` also knows the named specials (Chrome, Gold, Rainbow, Galaxy).
+- CarBuilder: `paint` `Chrome` / `Gold` replace the body finish; `Rainbow` paint tags every painted part `"RainbowPaint"`, `neon` `Rainbow` tags the underglow parts `"RainbowNeon"`
+  (CollectionService); the client controller `CarFx` cycles their hue (20 Hz, parts within 150 studs of the camera). `smoke` `Galaxy` adds a sparkle emitter (also named `TireSmoke`).
+  `Hyper` is in `CarTypes.byId` (personal-only, NOT in `CarTypes.list`, so it never spawns as a customer) with its own wide body + rear wing in `CarParts/Designs.luau`.
+- Snapshot adds: `itemsOwned = { [itemKey] = true }`, `starterPack = { bought, dismissals }`, `decor = { owned, placed, bonus, queueFull }`.
+- Data fields: `starterPackBought: boolean`, `starterPackDismissals: number` (SetSetting `"starterPackDismissed"`, true → +1, capped at 3; the popup is never shown after 3 or after buying),
+  `decorOwned: {[id]: true}`, `decorPlaced: {["1".."6"]: id}` (string keys on purpose).
+- Remotes (RemoteFunction, return `(ok, messageKey)`): `BuyDecor(decorId)` (money items only), `PlaceDecor(slot, decorId?)` (slot 1..6, `nil` removes; an item lives in one slot, placing it elsewhere moves it).
+  Both validate types / ownership and use a per-player busy lock.
+- `Config/Decor.luau`: `SLOTS = 6`, `MAX_BONUS = 0.35`, `items` (`id`, `price` or `robuxProduct`, `bonus`), `byId`, `totalBonus(placed)`.
+- `DecorService` (after `UnlockService` in `Main`): `DecorService.bonus(player)` = min(MAX_BONUS, sum of the bonus of PLACED + owned items). `CustomerService.spawnInterval` multiplies by `(1 - bonus)` after its minimum clamp;
+  the shopper interval in `ShopService` and `OfflineService` gets the same factor. `noteArrival(plotIndex)` (CustomerService) bumps the model attribute `Arrivals` of the Fireworks model;
+  `noteQueueFull(plotIndex)` feeds `snapshot.decor.queueFull` (≥ 3 full-queue spawns in 180 s and no Parking unlock → "buy parking" hint).
+- Models (`src/server/Models/DecorModels.luau`) are built on the server inside `PlotN.StorefrontDecor.Items` (anchored parts, tag `DecorModel`, attributes `Decor` / `PlotIndex` / `Slot`) and removed when the plot is released.
+  Slot positions are plot-local `x = ±24`, `z = -76 / -90 / -104` (slots 1-3 left of the connector road, 4-6 right), the model front faces the road. Each slot has a faint `DecorPad` (shown while empty) and a
+  `ProximityPrompt` (`OwnerUserId` attribute, handled by `PromptFilter`) that fires `OpenUI("Decor", slot)`.
+- Animated parts carry the attributes `Anim` (role), `AnimIdx`, `AnimPivot` (world Vector3), `OnColor`; the client controller `DecorAnimator` animates them at 30 Hz within 200 studs and runs the bursts
+  (bear jump + confetti on `Effect "Repair"`, fireworks on `Arrivals`, dragon smoke).
+- Client helper `src/client/RobuxBuy.luau`: `available(productKey)`, `priceText(productKey, onReady?)`, `buy(productKey)` (DebugPurchase in Studio when the id is 0). Controllers: `Decor` (window), `StarterPack` (popup), `CarFx`, `DecorAnimator`.
 
 ## 17. Cars (`src/shared/CarBuilder.luau`, v2)
 

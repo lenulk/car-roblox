@@ -287,7 +287,7 @@ local function get(lang: string, key: string, ...: any): string
 	return template
 end
 
-for _, extraName in { "StringsUI", "StringsTuning" } do
+for _, extraName in { "StringsUI", "StringsTuning", "StringsRobux2" } do
 	local extraModule = script.Parent:FindFirstChild(extraName)
 	if extraModule then
 		local ok, extra = pcall(require, extraModule :: ModuleScript)

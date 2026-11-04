@@ -12,6 +12,7 @@ local RunService = game:GetService("RunService")
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
 local Remotes = require(Shared.Remotes)
 local Format = require(Shared.Format)
+local Strings = require(Shared.Config.Strings)
 local Products = require(Shared.Config.Products)
 local GamePasses = require(Shared.Config.GamePasses)
 
@@ -238,8 +239,97 @@ local function registerBuiltInKinds()
 	end)
 end
 
+----------------------------------------------------------------------------------------------------
+-- Round 2 kind: one-time Robux items (Config/Products.Items)
+----------------------------------------------------------------------------------------------------
+
+-- True when the player already has everything this item would give (money does not count: it is not "owned").
+-- Items with `once` are owned when their Data flag is set.
+local function itemOwned(data: PlayerData.Data, entry: any): boolean
+	local grant: Products.ItemGrant = entry.grant
+	if entry.once then
+		return (data :: any)[entry.once] == true
+	end
+	local hasGrant = false
+	if grant.part then
+		hasGrant = true
+		if data.ownedParts[grant.part] ~= true then
+			return false
+		end
+	end
+	if grant.theme then
+		hasGrant = true
+		if data.ownedThemes[grant.theme] ~= true then
+			return false
+		end
+	end
+	if grant.car then
+		hasGrant = true
+		if data.cars[grant.car] == nil then
+			return false
+		end
+	end
+	if grant.decor then
+		hasGrant = true
+		if data.decorOwned[grant.decor] ~= true then
+			return false
+		end
+	end
+	return hasGrant
+end
+
+local function registerUnlockKind()
+	PurchaseService.registerKind("unlock", function(_player, data, entry)
+		local grant: Products.ItemGrant = entry.grant
+		local name = Strings.get(data.settings.lang, "item_" .. entry.key)
+		if itemOwned(data, entry) then
+			-- bought twice (e.g. two servers): the receipt is still granted, nothing changes
+			return true, "notify_already_owned", { name }
+		end
+		if grant.part then
+			data.ownedParts[grant.part] = true
+		end
+		if grant.theme then
+			data.ownedThemes[grant.theme] = true
+		end
+		if grant.car and data.cars[grant.car] == nil then
+			-- same as BuyCar; a player with no car yet also gets the starter Sedan (ensureStarterCar skips non-empty garages)
+			local personalCars: any = require(script.Parent.PersonalCarService)
+			if next(data.cars) == nil then
+				data.cars.Sedan = personalCars.newCarSave()
+			end
+			data.cars[grant.car] = personalCars.newCarSave()
+			data.selectedCar = grant.car
+		end
+		if grant.decor then
+			data.decorOwned[grant.decor] = true
+		end
+		if grant.money then
+			data.money += grant.money -- bought money, not counted as earned
+		end
+		if entry.once then
+			(data :: any)[entry.once] = true
+		end
+		if grant.decor then
+			return true, "notify_decor_bought", { name }
+		end
+		return true, "notify_item_bought", { name }
+	end, function(player, entry)
+		local grant: Products.ItemGrant = entry.grant
+		if grant.car then
+			local ok, err = pcall(function()
+				require(script.Parent.ShowcaseService).refresh(player)
+			end)
+			if not ok then
+				warn("[PurchaseService] showcase refresh failed: " .. tostring(err))
+			end
+		end
+	end)
+end
+
 function PurchaseService.init()
 	registerBuiltInKinds()
+	registerUnlockKind()
 end
 
 function PurchaseService.start()
@@ -247,8 +337,17 @@ function PurchaseService.start()
 
 	Remotes.get("DebugPurchase").OnServerEvent:Connect(onDebugPurchase)
 
-	PlayerData.addSnapshotField(function(player, _data, snapshot)
+	PlayerData.addSnapshotField(function(player, data, snapshot)
 		snapshot.cashPacks = PurchaseService.cashAmounts(player)
+		-- one-time Robux items the player already has (the shop shows an "Owned" badge)
+		local itemsOwned: { [string]: boolean } = {}
+		for _, entry in Products.Items do
+			if itemOwned(data, entry) then
+				itemsOwned[entry.key] = true
+			end
+		end
+		snapshot.itemsOwned = itemsOwned
+		snapshot.starterPack = { bought = data.starterPackBought, dismissals = data.starterPackDismissals }
 	end)
 
 	Players.PlayerRemoving:Connect(function(player)

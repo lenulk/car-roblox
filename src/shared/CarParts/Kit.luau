@@ -4,7 +4,13 @@
 -- WedgePart default orientation: sloped face looks up/-Z, the tall vertical edge is at +Z (thin edge at -Z).
 -- Cylinder Parts: the axis is the part's local X, Size = (length, diameter, diameter).
 
+local CollectionService = game:GetService("CollectionService")
+
 local Kit = {}
+
+-- CollectionService tags read by the client controller CarFx (Robux rainbow paint / rainbow underglow)
+Kit.TAG_RAINBOW_PAINT = "RainbowPaint"
+Kit.TAG_RAINBOW_NEON = "RainbowNeon"
 
 export type Props = { [string]: any }
 
@@ -96,18 +102,25 @@ function Kit.tools(ctx: any, parent: Instance): any
 		return make("Part", name, V3(w, t, math.max(len, 0.05)), cf, color, props)
 	end
 
-	-- painted pieces (follow the body paint + material)
+	-- painted pieces (follow the body paint + material). With the Rainbow paint (ctx.rainbowPaint) every painted
+	-- piece gets the "RainbowPaint" tag: the client controller CarFx cycles the hue of tagged parts.
+	local function paintTag(p: BasePart): BasePart
+		if ctx.rainbowPaint then
+			CollectionService:AddTag(p, Kit.TAG_RAINBOW_PAINT)
+		end
+		return p
+	end
 	T.pbox = function(name: string, size: Vector3, cf: CFrame): BasePart
-		return T.box(name, size, cf, ctx.paintColor, ctx.paintProps)
+		return paintTag(T.box(name, size, cf, ctx.paintColor, ctx.paintProps))
 	end
 	T.pwedge = function(name: string, size: Vector3, cf: CFrame): BasePart
-		return T.wedge(name, size, cf, ctx.paintColor, ctx.paintProps)
+		return paintTag(T.wedge(name, size, cf, ctx.paintColor, ctx.paintProps))
 	end
 	T.pcyl = function(name: string, length: number, dia: number, cf: CFrame): BasePart
-		return T.cyl(name, length, dia, cf, ctx.paintColor, ctx.paintProps)
+		return paintTag(T.cyl(name, length, dia, cf, ctx.paintColor, ctx.paintProps))
 	end
 	T.pbeam = function(name: string, a: Vector3, b: Vector3, w: number, t: number): BasePart
-		return T.beam(name, a, b, w, t, ctx.paintColor, ctx.paintProps)
+		return paintTag(T.beam(name, a, b, w, t, ctx.paintColor, ctx.paintProps))
 	end
 
 	-- glass pieces (follow the tint)

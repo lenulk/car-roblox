@@ -58,6 +58,8 @@
 - ⬜ สร้าง Game Pass บน Creator Dashboard แล้วใส่ ID ใน `Config/GamePasses.luau` (0 = ปิด)
 - ⬜ ตั้ง Max Players = 4 และเปิด Studio Access to API Services
 - ⬜ Create Developer Products CashS/M/L/XL, Boost2x, InstantRepair and Game Pass VIP on Creator Hub; paste ids into `Config/Products.luau` and `Config/GamePasses.luau` (0 = hidden in live games; shown with a TEST tag in Studio while `DEBUG_FAKE_IN_STUDIO = true`; set it to `false` before release)
+- ⬜ Create the round-2 Developer Products on Creator Hub and paste the ids into `Config/Products.luau` → `Items` (0 = hidden in live games). Suggested prices: PaintChrome 49, PaintGold 49, PaintRainbow 49, NeonRainbow 39, SmokeGalaxy 39, ThemeGold 149, CarHyper 399, StarterPack 49 (25,000 cash + Gold paint, one time), DecorBear 99, DecorRobot 149, DecorDragon 199, DecorGold 249, DecorFireworks 129. The price shown in game comes from the product itself, so these `robux` values are only fallbacks.
+- ⬜ Test round 2 in Studio (checklist in `docs/KIRO_ROBUX_PROMPT_2.md` §4): nothing has been run in Studio yet, only a static type check with luau-lsp.
 
 ## 8.5 บัค/คำขอจากผู้ใช้ (รอแก้)
 - ✅ **ซื้อ/ปลด service (สถานี/เครื่องมือ)** — ผู้ใช้สงสัยว่าเป็นบัค

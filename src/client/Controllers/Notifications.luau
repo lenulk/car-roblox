@@ -31,7 +31,7 @@ local function colorsFor(key: string): (Color3, Color3)
 end
 
 function Notifications.start()
-	local _gui, root = Theme.newGui("Notifications", 8, false)
+	local _gui, root = Theme.newGui("Notifications", 50, false) -- above every modal (20-40) so toasts are never hidden
 
 	local container = Theme.new("Frame", {
 		Name = "Toasts",

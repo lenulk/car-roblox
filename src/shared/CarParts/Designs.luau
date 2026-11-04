@@ -29,6 +29,7 @@ Designs.PARAMS = {
 	Truck = { kD = 0.22, tw = 1.3, axF = -0.28, axR = 0.285 },
 	Sports = { kD = 0.195, tw = 1.1, axF = -0.31, axR = 0.31 },
 	Super = { kD = 0.175, tw = 1.2, axF = -0.32, axR = 0.28 },
+	Hyper = { kD = 0.172, tw = 1.4, axF = -0.325, axR = 0.285 }, -- wider track than the Super
 } :: { [string]: any }
 
 ------------------------------------------------------------------------------------------------
@@ -63,7 +64,7 @@ local function specFor(id: string, ctx: any): any
 		sp.gc, sp.slabTop, sp.beltTop, sp.roofY = 0.113 * H, 0.575 * H, 0.65 * H, H
 		sp.zA, sp.zB, sp.zC, sp.zD = -0.17 * L, -0.06 * L, 0.115 * L, 0.30 * L
 		sp.seams = { ctx.axF + ctx.D / 2 + 0.1, sp.zC + 0.25 }
-	elseif id == "Super" then
+	elseif id == "Super" or id == "Hyper" then -- Hyper shares the Super's structure (lower roof comes from its size)
 		sp.rear = "fast"
 		sp.noseL = 0.18 * L
 		sp.gc, sp.slabTop, sp.beltTop, sp.roofY = 0.108 * H, 0.581 * H, 0.649 * H, H
@@ -839,6 +840,43 @@ local function superEnds(ctx: any, T: any, P: any)
 	end
 end
 
+-- Hyper = Super structure (low, wide) plus a big fixed rear wing, front canards and rear haunch fins.
+-- The wing is skipped when the player picked a spoiler (Custom.apply adds that one instead).
+local function hyperExtras(ctx: any, T: any, P: any)
+	local Wb: number = P.Wb
+	local zf, zr = P.zf, P.zr
+
+	if ctx.custom.spoiler == "None" then
+		local ww = Wb + 0.5 -- wider than the body
+		local y0: number = P.deckY
+		local zc = zr - 1.1
+		local hh = 2.5
+		for _, sx in { -1, 1 } do
+			local x = sx * (ww / 2 - 1.8)
+			-- two swan-neck pylons from the deck up into the wing
+			T.beam("WingPylon", V3(x, y0, zr - 2.6), V3(x, y0 + hh - 0.1, zr - 1.2), 0.34, 0.55, DARK)
+			T.beam("WingNeck", V3(x, y0 + hh - 0.1, zr - 1.2), V3(x, y0 + hh + 0.12, zr - 0.55), 0.34, 0.24, DARK)
+			T.box("WingBase", V3(1.0, 0.1, 1.5), CF(x, y0 + 0.05, zr - 2.6), DARK)
+			-- tall end plates
+			T.pbox("BodyPanel", V3(0.16, 1.5, 2.7), CF(sx * ww / 2, y0 + hh + 0.2, zc))
+		end
+		T.pbox("BodyPanel", V3(ww, 0.2, 2.2), CF(0, y0 + hh, zc) * ANG(-0.14, 0, 0)) -- main element
+		T.pbox("BodyPanel", V3(ww, 0.14, 1.1), CF(0, y0 + hh + 0.5, zc + 0.8) * ANG(-0.45, 0, 0)) -- upper flap
+		T.box("WingLip", V3(ww, 0.07, 0.18), CF(0, y0 + hh + 0.22, zc - 1.08), Kit.CARBON, Kit.CARBON_PROPS)
+	end
+
+	-- front canards (dive planes) on the nose corners
+	for _, sx in { -1, 1 } do
+		T.pbox("BodyPanel", V3(1.1, 0.1, 0.8), CF(sx * (Wb / 2 - 0.5), 0.75, zf + 0.9) * ANG(0, 0, sx * 0.38))
+	end
+	if ctx.detail then
+		-- rear haunch fins either side of the engine deck
+		for _, sx in { -1, 1 } do
+			T.pbox("BodyPanel", V3(0.3, 0.55, 3.2), CF(sx * (Wb / 2 - 0.1), P.beltTop + 0.25, zr - 4.0))
+		end
+	end
+end
+
 local function pickupEnds(ctx: any, T: any, P: any)
 	local Wb: number = P.Wb
 	local zf, zr = P.zf, P.zr
@@ -936,6 +974,9 @@ function Designs.build(ctx: any): any
 		sportsEnds(ctx, T, P)
 	elseif id == "Super" then
 		superEnds(ctx, T, P)
+	elseif id == "Hyper" then
+		superEnds(ctx, T, P)
+		hyperExtras(ctx, T, P)
 	else
 		sedanEnds(ctx, T, P)
 	end

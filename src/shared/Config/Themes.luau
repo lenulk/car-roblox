@@ -39,6 +39,18 @@ local list = {
 		stripe = Color3.fromRGB(200, 160, 60),
 		uniform = Color3.fromRGB(20, 18, 16),
 	},
+	-- Robux only: price 0, owned once Products.Items.ThemeGold is bought
+	{
+		id = "GoldGarage",
+		price = 0,
+		robuxProduct = "ThemeGold",
+		accent = Color3.fromRGB(255, 190, 50),
+		wall = Color3.fromRGB(18, 17, 16),
+		floor = Color3.fromRGB(34, 30, 24),
+		roof = Color3.fromRGB(10, 9, 8),
+		stripe = Color3.fromRGB(255, 214, 96),
+		uniform = Color3.fromRGB(22, 20, 17),
+	},
 }
 local byId = {}
 for _, entry in list do

@@ -29,6 +29,8 @@ local DEFINITIONS: { [string]: string } = {
 	DriveCar = "RemoteFunction", -- (carId, mode?) -> ok, key   (mode: nil = connector road, "track" = private race track)
 	ReturnCar = "RemoteEvent", -- ()
 	DebugPurchase = "RemoteEvent", -- (key) Studio-only fake purchase of a product / game pass (ignored in live games)
+	BuyDecor = "RemoteFunction", -- (decorId) -> ok, key   (money decorations only; Robux ones go through the product prompt)
+	PlaceDecor = "RemoteFunction", -- (slot, decorId?) -> ok, key   (decorId nil = remove what is in the slot)
 }
 
 local Remotes = {}

@@ -38,6 +38,10 @@ export type Data = {
 	prologueDone: boolean, -- opening scene watched (or skipped)
 	receipts: { [string]: number }, -- Robux PurchaseId -> os.time() granted (newest 200 kept)
 	boostUntil: number, -- os.time() when the paid income boost ends (0 = none)
+	starterPackBought: boolean, -- Starter Pack is a one-time Robux item
+	starterPackDismissals: number, -- times the player closed the Starter Pack popup (0..3, never shown after 3)
+	decorOwned: { [string]: boolean }, -- storefront decorations owned (id -> true)
+	decorPlaced: { [string]: string }, -- slot ("1".."6", string keys so DataStore treats it as a map) -> decor id
 }
 
 type Profile = {
@@ -85,6 +89,10 @@ local function defaultData(player: Player): Data
 		prologueDone = false,
 		receipts = {},
 		boostUntil = 0,
+		starterPackBought = false,
+		starterPackDismissals = 0,
+		decorOwned = {},
+		decorPlaced = {},
 	}
 end
 
@@ -277,6 +285,11 @@ local function onSetSetting(player: Player, key: any, value: any)
 	elseif key == "music" and type(value) == "boolean" then
 		PlayerData.update(player, function(data)
 			data.settings.music = value
+		end)
+	elseif key == "starterPackDismissed" and value == true then
+		-- counts closes of the Starter Pack popup (capped at 3: after that it is never shown again)
+		PlayerData.update(player, function(data)
+			data.starterPackDismissals = math.min(3, data.starterPackDismissals + 1)
 		end)
 	elseif key == "prologueDone" and value == true then
 		-- one way only: false -> true

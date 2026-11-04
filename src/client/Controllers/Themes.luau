@@ -13,6 +13,7 @@ local Controllers = script.Parent :: Instance
 local Client = Controllers.Parent :: Instance
 local ClientState: any = require(Client:WaitForChild("ClientState") :: ModuleScript)
 local Theme: any = require(Client:WaitForChild("Theme") :: ModuleScript)
+local RobuxBuy: any = require(Client:WaitForChild("RobuxBuy") :: ModuleScript)
 local Localizer: any = require(Controllers:WaitForChild("Localizer") :: ModuleScript)
 
 local Themes = {}
@@ -107,7 +108,8 @@ function Themes.start()
 	----------------------------------------------------------------- cards (built once, restyled on snapshots)
 	local busy = false
 	-- entry: { id, price, button, statusLabel }
-	local entries: { { id: string, price: number, button: any, status: any, card: any, stroke: UIStroke } } = {}
+	-- product = Robux product key of a Robux-only theme (price is 0 and never charged in money)
+	local entries: { { id: string, price: number, product: string?, button: any, status: any, card: any, stroke: UIStroke } } = {}
 
 	local function swatch(parent: Instance, index: number, color: Color3?): any
 		local s = Theme.new("Frame", {
@@ -134,6 +136,10 @@ function Themes.start()
 	for index, definition in ThemeConfig.list do
 		local id: string = definition.id
 		local price: number = if type(definition.price) == "number" then definition.price else 0
+		local product: string? = if type(definition.robuxProduct) == "string" then definition.robuxProduct else nil
+		if product and not RobuxBuy.available(product) then
+			continue -- Robux theme whose product id does not exist yet (hidden in live games)
+		end
 
 		local card = Theme.new("Frame", {
 			Name = "Card_" .. id,
@@ -198,7 +204,7 @@ function Themes.start()
 		}, card)
 		Theme.fitText(button, 12, 24)
 
-		local entry = { id = id, price = price, button = button, status = status, card = card, stroke = cardStroke }
+		local entry = { id = id, price = price, product = product, button = button, status = status, card = card, stroke = cardStroke }
 		table.insert(entries, entry)
 		button.Activated:Connect(function()
 			if busy then
@@ -206,7 +212,12 @@ function Themes.start()
 			end
 			local snapshot: any = ClientState.snapshot
 			local themes: any = if snapshot then snapshot.themes else nil
-			local owned = id == "Classic" or price == 0 or (type(themes) == "table" and type(themes.owned) == "table" and themes.owned[id] == true)
+			local isOwned = type(themes) == "table" and type(themes.owned) == "table" and themes.owned[id] == true
+			if product and not isOwned then
+				RobuxBuy.buy(product) -- once the snapshot shows it owned, Apply works like any owned theme
+				return
+			end
+			local owned = id == "Classic" or price == 0 or isOwned
 			local current = type(themes) == "table" and themes.current == id
 			local money: number = if snapshot and type(snapshot.money) == "number" then snapshot.money else 0
 			if current or (not owned and money < price) then
@@ -235,11 +246,24 @@ function Themes.start()
 		local money: number = if type(snapshot.money) == "number" then snapshot.money else 0
 
 		for _, entry in entries do
-			local owned = ownedMap[entry.id] == true or entry.price == 0
+			local owned = ownedMap[entry.id] == true or (entry.price == 0 and entry.product == nil)
 			local applied = currentId == entry.id
 			local affordable = money >= entry.price
+			local robuxPrice: string? = nil
+			if entry.product and not owned then
+				robuxPrice = RobuxBuy.priceText(entry.product, function()
+					if m.isOpen then
+						render()
+					end
+				end)
+			end
 
-			if applied then
+			if robuxPrice then
+				Localizer.bind(entry.status, "ui_robux_only")
+				entry.status.TextColor3 = RobuxBuy.GOLD
+				Localizer.bind(entry.button, "themes_buy", robuxPrice)
+				affordable = true
+			elseif applied then
 				Localizer.bind(entry.status, "ui_applied")
 				entry.status.TextColor3 = C.star
 				Localizer.bind(entry.button, "ui_applied")
@@ -259,9 +283,10 @@ function Themes.start()
 				BackgroundColor3 = if enabled then C.accent elseif applied then Color3.fromRGB(46, 96, 64) else C.gray,
 				TextColor3 = if enabled then C.text else C.textDim,
 			}, 0.15)
-			entry.stroke.Color = if applied then C.star else C.stroke
-			entry.stroke.Thickness = if applied then 3 else 1.5
-			entry.stroke.Transparency = if applied then 0 else 0.75
+			local goldBorder = applied or robuxPrice ~= nil -- applied theme, or a Robux-only theme not bought yet
+			entry.stroke.Color = if goldBorder then RobuxBuy.GOLD else C.stroke
+			entry.stroke.Thickness = if goldBorder then 3 else 1.5
+			entry.stroke.Transparency = if goldBorder then 0 else 0.75
 		end
 	end
 

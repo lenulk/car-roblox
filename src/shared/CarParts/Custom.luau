@@ -2,6 +2,8 @@
 -- Customization visuals bolted onto a finished body: spoilers, body kits, hood options, decals, underglow.
 -- `P` is the profile table returned by Designs.build (see shell()).
 
+local CollectionService = game:GetService("CollectionService")
+
 local Kit = require(script.Parent.Kit)
 
 local Custom = {}
@@ -341,7 +343,15 @@ local function underglow(ctx: any, T: any, P: any)
 	local color = neon :: Color3
 	local Wb: number = P.Wb
 	local len = P.zr - P.zf - 2.0
-	local main = T.box("Underglow", V3(Wb - 0.6, 0.1, len), CF(0, math.max(P.gc - 0.28, 0.12), (P.zf + P.zr) / 2), color, NEON)
+	-- Rainbow underglow (Robux): tagged so the client controller CarFx cycles the hue of the parts and the light
+	local rainbow = ctx.custom.neon == "Rainbow"
+	local function glow(part: BasePart): BasePart
+		if rainbow then
+			CollectionService:AddTag(part, Kit.TAG_RAINBOW_NEON)
+		end
+		return part
+	end
+	local main = glow(T.box("Underglow", V3(Wb - 0.6, 0.1, len), CF(0, math.max(P.gc - 0.28, 0.12), (P.zf + P.zr) / 2), color, NEON))
 	local light = Instance.new("PointLight")
 	light.Name = "UnderglowLight"
 	light.Color = color
@@ -352,10 +362,10 @@ local function underglow(ctx: any, T: any, P: any)
 	local z0 = ctx.axF + ctx.D / 2 + 0.2
 	local z1 = ctx.axR - ctx.D / 2 - 0.2
 	for _, sx in { -1, 1 } do
-		T.box("UnderglowStrip", V3(0.14, 0.12, z1 - z0), CF(sx * (Wb / 2 - 0.12), sy, (z0 + z1) / 2), color, NEON)
+		glow(T.box("UnderglowStrip", V3(0.14, 0.12, z1 - z0), CF(sx * (Wb / 2 - 0.12), sy, (z0 + z1) / 2), color, NEON))
 	end
-	T.box("UnderglowStrip", V3(Wb - 1.0, 0.12, 0.14), CF(0, sy, P.zf + 0.5), color, NEON)
-	T.box("UnderglowStrip", V3(Wb - 1.0, 0.12, 0.14), CF(0, sy, P.zr - 0.5), color, NEON)
+	glow(T.box("UnderglowStrip", V3(Wb - 1.0, 0.12, 0.14), CF(0, sy, P.zf + 0.5), color, NEON))
+	glow(T.box("UnderglowStrip", V3(Wb - 1.0, 0.12, 0.14), CF(0, sy, P.zr - 0.5), color, NEON))
 end
 
 ------------------------------------------------------------------------------------------------

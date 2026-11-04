@@ -22,6 +22,7 @@ local TrafficService = require(script.Parent.TrafficService)
 local RepairService = require(script.Parent.RepairService)
 local HireService = require(script.Parent.HireService)
 local MapBuilder = require(script.Parent.MapBuilder)
+local DecorService = require(script.Parent.DecorService)
 
 local WASH_SLOW_SPEED = 6
 
@@ -114,7 +115,8 @@ local function spawnInterval(player: Player): number
 	if reception > 0 then
 		interval *= Game.RECEPTION_SPAWN_MULT[reception] or 1
 	end
-	return interval
+	-- storefront decorations apply AFTER the minimum clamp, so they can go below SPAWN_INTERVAL_MIN
+	return interval * (1 - DecorService.bonus(player))
 end
 CustomerService.spawnInterval = spawnInterval -- used by OfflineService
 
@@ -327,6 +329,9 @@ end
 local function spawnCustomer(plotIndex: number, state: PlotState)
 	local queueIndex = freeQueueIndex(state)
 	local problems = availableProblems(state.player)
+	if not queueIndex then
+		DecorService.noteQueueFull(plotIndex) -- "buy parking" hint in the decor window
+	end
 	if not queueIndex or #problems == 0 then
 		return
 	end
@@ -354,6 +359,8 @@ local function spawnCustomer(plotIndex: number, state: PlotState)
 	setState(customer, "Arriving")
 	state.queue[queueIndex] = customer
 	state.customers[customer] = true
+
+	DecorService.noteArrival(plotIndex) -- welcome fireworks
 
 	local path = Layout.arrivalPath(plotIndex, queueIndex)
 	local roadPath = table.move(path, 1, #path - 2, 1, {})

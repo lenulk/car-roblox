@@ -179,6 +179,39 @@ local function makeSmoke(att: Attachment, color: Color3)
 	e.Parent = att
 end
 
+-- Galaxy smoke (Robux): the smoke itself turns purple/blue/pink and a second emitter adds sparkles.
+-- Both are named "TireSmoke" because VehicleController switches emitters by that name.
+local function makeGalaxySparkle(att: Attachment)
+	local smoke = att:FindFirstChild("TireSmoke")
+	if smoke and smoke:IsA("ParticleEmitter") then
+		smoke.Color = ColorSequence.new({
+			ColorSequenceKeypoint.new(0, RGB(150, 90, 255)),
+			ColorSequenceKeypoint.new(0.5, RGB(70, 90, 255)),
+			ColorSequenceKeypoint.new(1, RGB(230, 90, 255)),
+		})
+		smoke.LightEmission = 0.8
+	end
+	local e = Instance.new("ParticleEmitter")
+	e.Name = "TireSmoke"
+	e.Enabled = false
+	e.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+	e.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, RGB(255, 255, 255)),
+		ColorSequenceKeypoint.new(0.5, RGB(170, 140, 255)),
+		ColorSequenceKeypoint.new(1, RGB(100, 190, 255)),
+	})
+	e.LightEmission = 1
+	e.LightInfluence = 0
+	e.Lifetime = NumberRange.new(0.8, 1.6)
+	e.Rate = 40
+	e.Speed = NumberRange.new(4, 9)
+	e.SpreadAngle = Vector2.new(40, 40)
+	e.Acceleration = V3(0, 3, 0)
+	e.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.6), NumberSequenceKeypoint.new(1, 0) })
+	e.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(1, 1) })
+	e.Parent = att
+end
+
 local function makeAttachment(root: BasePart, name: string, pos: Vector3): Attachment
 	local a = Instance.new("Attachment")
 	a.Name = name
@@ -241,6 +274,12 @@ local function buildProcedural(
 	end
 	local offroad = wheelStyle == "OffRoad"
 	local paintColor, paintProps = paintFor(custom.material, paintBase)
+	-- Robux-only paints: Chrome / Gold replace the body finish, Rainbow keeps it but its hue is cycled on the client
+	if custom.paint == "Chrome" then
+		paintColor, paintProps = RGB(226, 230, 238), { Material = Enum.Material.Metal, Reflectance = 0.8 }
+	elseif custom.paint == "Gold" then
+		paintColor, paintProps = RGB(255, 196, 48), { Material = Enum.Material.Metal, Reflectance = 0.45 }
+	end
 	local glassColor, glassT = glassFor(custom.tint)
 
 	local ctx: any = {
@@ -267,6 +306,7 @@ local function buildProcedural(
 		rimColor = hexToColor(custom.rim),
 		caliperColor = hexToColor(custom.caliper),
 		hoodStyle = custom.hood,
+		rainbowPaint = custom.paint == "Rainbow",
 		plateText = string.format("GT-%04d", math.random(0, 9999)),
 		numberText = tostring(stringHash(id .. custom.paint) % 99 + 1),
 	}
@@ -303,8 +343,18 @@ local function buildProcedural(
 	end
 
 	local smokeColor = if custom.smoke ~= "None" then hexToColor(custom.smoke) else RGB(255, 255, 255)
-	makeSmoke(makeAttachment(root, "SmokeRL", V3(-ctx.wx, 0.15, ctx.axR)), smokeColor)
-	makeSmoke(makeAttachment(root, "SmokeRR", V3(ctx.wx, 0.15, ctx.axR)), smokeColor)
+	local galaxy = custom.smoke == "Galaxy"
+	local smokeSpots: { { name: string, x: number } } = {
+		{ name = "SmokeRL", x = -ctx.wx },
+		{ name = "SmokeRR", x = ctx.wx },
+	}
+	for _, spot in smokeSpots do
+		local att = makeAttachment(root, spot.name, V3(spot.x, 0.15, ctx.axR))
+		makeSmoke(att, smokeColor)
+		if galaxy then
+			makeGalaxySparkle(att)
+		end
+	end
 
 	-- welds + attributes -------------------------------------------------------------------------------
 	Kit.weldAll(model, root)

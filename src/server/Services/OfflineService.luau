@@ -17,6 +17,7 @@ local HireService = require(script.Parent.HireService)
 local EconomyService = require(script.Parent.EconomyService)
 local CustomerService = require(script.Parent.CustomerService)
 local GamePassService = require(script.Parent.GamePassService)
+local DecorService = require(script.Parent.DecorService)
 
 local OfflineService = {}
 
@@ -86,7 +87,9 @@ function OfflineService.estimatePerSecond(player: Player): number
 	end
 	if shelfCount > 0 then
 		local reception = HireService.receptionistLevel(player)
-		local interval = Shelves.SHOPPER_INTERVAL * (if reception > 0 then Game.RECEPTION_SPAWN_MULT[reception] or 1 else 1)
+		local interval = Shelves.SHOPPER_INTERVAL
+			* (if reception > 0 then Game.RECEPTION_SPAWN_MULT[reception] or 1 else 1)
+			* (1 - DecorService.bonus(player))
 		local demandRate = (priceSum / shelfCount) * ITEMS_PER_SHOPPER / interval
 		rate += math.min(restockRate, demandRate)
 	end

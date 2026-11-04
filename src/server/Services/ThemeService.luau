@@ -98,6 +98,11 @@ local function buyTheme(player: Player, themeId: any): (boolean, string)
 		return false, "notify_max_level"
 	end
 	local name = Strings.get(data.settings.lang, "theme_" .. theme.id)
+	if theme.robuxProduct and not data.ownedThemes[theme.id] then
+		-- Robux-only theme that was never bought: PurchaseService grants it
+		Remotes.get("Notify"):FireClient(player, "notify_robux_only")
+		return false, "notify_robux_only"
+	end
 	if not data.ownedThemes[theme.id] then
 		if data.money < theme.price then
 			Remotes.get("Notify"):FireClient(player, "notify_not_enough_money", { Format.money(theme.price - data.money) })

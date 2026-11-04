@@ -20,6 +20,7 @@ local EconomyService = require(script.Parent.EconomyService)
 local MapBuilder = require(script.Parent.MapBuilder)
 local ShopperService = require(script.Parent.ShopperService)
 local EmployeeService = require(script.Parent.EmployeeService)
+local DecorService = require(script.Parent.DecorService)
 
 local ShopService = {}
 
@@ -154,7 +155,9 @@ local function tick(plotIndex: number, shop: PlotShop, dt: number)
 	shop.shopperTimer -= dt
 	if shop.shopperTimer <= 0 then
 		local reception = HireService.receptionistLevel(player)
-		local interval = Shelves.SHOPPER_INTERVAL * (if reception > 0 then Game.RECEPTION_SPAWN_MULT[reception] or 1 else 1)
+		local interval = Shelves.SHOPPER_INTERVAL
+			* (if reception > 0 then Game.RECEPTION_SPAWN_MULT[reception] or 1 else 1)
+			* (1 - DecorService.bonus(player))
 		shop.shopperTimer = interval * (0.75 + math.random() * 0.5)
 		local stocked = {}
 		for _, shelfId in shelves do

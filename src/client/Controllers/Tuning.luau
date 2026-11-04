@@ -22,6 +22,7 @@ local PersonalCars: any = require(Shared:WaitForChild("Config"):WaitForChild("Pe
 local Client = (script.Parent :: Instance).Parent :: Instance
 local ClientState: any = require(Client:WaitForChild("ClientState") :: ModuleScript)
 local Theme: any = require(Client:WaitForChild("Theme") :: ModuleScript)
+local RobuxBuy: any = require(Client:WaitForChild("RobuxBuy") :: ModuleScript)
 local Localizer: any = require((script.Parent :: Instance):WaitForChild("Localizer") :: ModuleScript)
 
 local LocalPlayer = Players.LocalPlayer
@@ -207,8 +208,19 @@ function Tuning.start()
 		previewCustom = serverCustom(previewCarId)
 	end
 
+	-- productKey of a Robux-only option / car (nil for money items)
+	local function robuxProductOf(category: string, optionId: string): string?
+		local option: any = Customization.option(category, optionId)
+		return if option and type(option.robuxProduct) == "string" then option.robuxProduct else nil
+	end
+
+	-- Robux options are hidden in live games until their product id exists (Studio shows them for testing)
+	local function optionVisible(option: any): boolean
+		return option.robuxProduct == nil or RobuxBuy.available(option.robuxProduct)
+	end
+
 	local function isPartOwned(category: string, optionId: string, price: number): boolean
-		if price <= 0 then
+		if price <= 0 and robuxProductOf(category, optionId) == nil then
 			return true
 		end
 		local s = snap()
@@ -721,6 +733,7 @@ function Tuning.start()
 		local owned = isPartOwned(cat.id, optionId, price)
 		local isNone = optionId == "None"
 		local color: Color3 = if isNone then C.panelLighter else Customization.hexToColor(optionId)
+		local robuxProduct = robuxProductOf(cat.id, optionId)
 
 		local cell = Theme.new("Frame", {
 			Name = "Swatch_" .. optionId,
@@ -740,8 +753,41 @@ function Tuning.start()
 		Theme.corner(btn, 28)
 		if selected then
 			Theme.stroke(btn, C.accent, 4, 0)
+		elseif robuxProduct and not owned then
+			Theme.stroke(btn, RobuxBuy.GOLD, 3, 0) -- Robux-only: gold border
 		else
 			Theme.stroke(btn, C.text, 1.5, 0.7)
+		end
+		if robuxProduct then
+			-- the named specials show what they look like: silver / gold shine or a rainbow
+			local gradient = Instance.new("UIGradient")
+			if optionId == "Rainbow" then
+				gradient.Color = ColorSequence.new({
+					ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 80, 80)),
+					ColorSequenceKeypoint.new(0.25, Color3.fromRGB(255, 220, 60)),
+					ColorSequenceKeypoint.new(0.5, Color3.fromRGB(80, 230, 120)),
+					ColorSequenceKeypoint.new(0.75, Color3.fromRGB(70, 160, 255)),
+					ColorSequenceKeypoint.new(1, Color3.fromRGB(200, 90, 240)),
+				})
+				gradient.Rotation = 45
+				btn.BackgroundColor3 = Color3.new(1, 1, 1) -- the gradient is the colour
+			elseif optionId == "Galaxy" then
+				gradient.Color = ColorSequence.new({
+					ColorSequenceKeypoint.new(0, Color3.fromRGB(90, 60, 200)),
+					ColorSequenceKeypoint.new(0.5, Color3.fromRGB(60, 120, 255)),
+					ColorSequenceKeypoint.new(1, Color3.fromRGB(230, 90, 255)),
+				})
+				gradient.Rotation = 45
+				btn.BackgroundColor3 = Color3.new(1, 1, 1)
+			else
+				gradient.Color = ColorSequence.new({
+					ColorSequenceKeypoint.new(0, Color3.new(1, 1, 1)),
+					ColorSequenceKeypoint.new(0.5, color),
+					ColorSequenceKeypoint.new(1, color:Lerp(Color3.new(0, 0, 0), 0.35)),
+				})
+				gradient.Rotation = 60
+			end
+			gradient.Parent = btn
 		end
 		if selected or isNone then
 			local mark = Theme.label({
@@ -777,8 +823,17 @@ function Tuning.start()
 			sub.TextColor3 = C.textDim
 			Localizer.bind(sub, "tuning_opt_" .. cat.id .. "_None")
 		elseif not owned then
-			sub.TextColor3 = C.money
-			sub.Text = Format.money(price)
+			if robuxProduct then
+				sub.TextColor3 = RobuxBuy.GOLD
+				sub.Text = RobuxBuy.priceText(robuxProduct, function()
+					if isOpen then
+						render()
+					end
+				end)
+			else
+				sub.TextColor3 = C.money
+				sub.Text = Format.money(price)
+			end
 		end
 
 		if popId == cat.id .. ":" .. optionId then
@@ -867,6 +922,8 @@ function Tuning.start()
 
 		local enabled = true
 		local color: Color3 = C.accent
+		local robuxProduct = robuxProductOf(cat.id, want)
+		local needsRobux = false
 		if not hasCar(carId) then
 			enabled = false
 			Localizer.bind(btn, "notify_need_car")
@@ -876,6 +933,16 @@ function Tuning.start()
 		elseif isPartOwned(cat.id, want, price) then
 			color = GREEN
 			Localizer.bind(btn, "tuning_install")
+		elseif robuxProduct then
+			-- Robux-only option not owned yet: the button prompts the product; once the snapshot shows it owned
+			-- this becomes a normal "Install" button
+			needsRobux = true
+			color = RobuxBuy.BUTTON
+			Localizer.bind(btn, "tuning_buy", RobuxBuy.priceText(robuxProduct, function()
+				if isOpen then
+					render()
+				end
+			end))
 		else
 			Localizer.bind(btn, "tuning_buy", Format.money(price))
 		end
@@ -886,7 +953,12 @@ function Tuning.start()
 		btn.BackgroundColor3 = if enabled then color else C.gray
 		btn.TextColor3 = if enabled then C.text else C.textDim
 		btn.Activated:Connect(function()
-			if enabled and not busy then
+			if not enabled or busy then
+				return
+			end
+			if needsRobux and robuxProduct then
+				RobuxBuy.buy(robuxProduct)
+			else
 				callServer("Customize", carId, cat.id, want)
 			end
 		end)
@@ -910,10 +982,12 @@ function Tuning.start()
 			grid = newGrid(cellWidthFor(170, 10), 88, 10, nextOrder())
 		end
 		for i, option in cat.options do
-			if cat.kind == "color" then
-				buildSwatch(grid, cat, option, i)
-			else
-				buildChoice(grid, cat, option, i)
+			if optionVisible(option) then
+				if cat.kind == "color" then
+					buildSwatch(grid, cat, option, i)
+				else
+					buildChoice(grid, cat, option, i)
+				end
 			end
 		end
 		buildAction(cat, nextOrder())
@@ -974,6 +1048,13 @@ function Tuning.start()
 		local isSelectedServer = s ~= nil and s.selectedCar == id
 		local isPreview = previewCarId == id
 		local price: number = entry.price or 0
+		-- Robux-only car (Hyper): shown with a gold border and a Robux price until bought
+		local robuxProduct: string? = if not owned and type(entry.robuxProduct) == "string" then entry.robuxProduct else nil
+		local function onPrice()
+			if isOpen then
+				render()
+			end
+		end
 
 		local card = Theme.new("TextButton", {
 			Name = "CarCard_" .. id,
@@ -986,6 +1067,8 @@ function Tuning.start()
 		Theme.corner(card, 16)
 		if isPreview then
 			Theme.stroke(card, C.accent, 3, 0)
+		elseif robuxProduct then
+			Theme.stroke(card, RobuxBuy.GOLD, 3, 0)
 		else
 			Theme.stroke(card, C.stroke, 1.5, 0.75)
 		end
@@ -1016,6 +1099,9 @@ function Tuning.start()
 		elseif owned then
 			status.TextColor3 = C.textDim
 			Localizer.bind(status, "tuning_owned")
+		elseif robuxProduct then
+			status.TextColor3 = RobuxBuy.GOLD
+			status.Text = RobuxBuy.priceText(robuxProduct, onPrice)
 		else
 			status.TextColor3 = C.money
 			status.Text = Format.money(price)
@@ -1068,7 +1154,10 @@ function Tuning.start()
 		Theme.fitText(btn, 12, 22)
 		local enabled = true
 		local color: Color3 = C.accent
-		if not owned then
+		if robuxProduct then
+			color = RobuxBuy.BUTTON
+			Localizer.bind(btn, "tuning_buy", RobuxBuy.priceText(robuxProduct, onPrice))
+		elseif not owned then
 			if price > 0 then
 				Localizer.bind(btn, "tuning_buy", Format.money(price))
 			else
@@ -1089,6 +1178,10 @@ function Tuning.start()
 		btn.TextColor3 = if enabled then C.text else C.textDim
 		btn.Activated:Connect(function()
 			if not enabled or busy then
+				return
+			end
+			if robuxProduct then
+				RobuxBuy.buy(robuxProduct) -- the server grants the car; afterwards it is a normal owned car
 				return
 			end
 			-- The preview car is the one DRIVE launches, so it follows a successful buy / select.
@@ -1121,7 +1214,10 @@ function Tuning.start()
 		local cellW = cellWidthFor(330, 12)
 		local grid = newGrid(cellW, 196, 12, nextOrder())
 		for i, entry in PersonalCars.list do
-			buildCarCard(grid, entry, i, cellW)
+			-- a Robux car without a product id yet stays hidden in live games (and once owned it always shows)
+			if hasCar(entry.id) or entry.robuxProduct == nil or RobuxBuy.available(entry.robuxProduct) then
+				buildCarCard(grid, entry, i, cellW)
+			end
 		end
 	end
 

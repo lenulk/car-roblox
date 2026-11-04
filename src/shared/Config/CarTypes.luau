@@ -84,8 +84,29 @@ local list = {
 		},
 	},
 }
+
+-- Bodies that exist only as personal cars (bought with Robux): CarBuilder can build them, but they never show up
+-- as customers, so they are NOT in `list` (CustomerService / TrafficService pick from `list`).
+local personalOnly = {
+	{
+		id = "Hyper",
+		payMult = 4,
+		weight = 0,
+		minStars = 99,
+		size = Vector3.new(8.0, 3.4, 15.8),
+		colors = {
+			Color3.fromRGB(255, 196, 48),
+			Color3.fromRGB(18, 18, 20),
+			Color3.fromRGB(0, 200, 230),
+		},
+	},
+}
+
 local byId = {}
 for _, entry in list do
+	byId[entry.id] = entry
+end
+for _, entry in personalOnly do
 	byId[entry.id] = entry
 end
 return { list = list, byId = byId }
